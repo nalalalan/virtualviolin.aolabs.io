@@ -1,0 +1,492 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #f8efe1;
+  background: #0d0d0f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(179, 97, 49, 0.16), transparent 32%),
+    #0d0d0f;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 22px clamp(14px, 3vw, 34px) 34px;
+}
+
+.suite-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1180px;
+  margin: 0 auto 18px;
+}
+
+.suite-home,
+.suite-app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #f6eadb;
+  text-decoration: none;
+}
+
+.suite-home img {
+  width: 42px;
+  height: 42px;
+  display: block;
+}
+
+.suite-app-mark {
+  width: 31px;
+  height: 31px;
+  display: block;
+}
+
+.suite-app-name {
+  font-size: 15px;
+  font-weight: 760;
+  color: #d7c8b8;
+}
+
+.instrument-shell {
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.instrument-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 430px);
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.app-kicker {
+  margin: 0 0 8px;
+  color: #cfa66e;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 790;
+}
+
+h1 {
+  margin: 0;
+  font-family:
+    "Aptos Display",
+    "Segoe UI Variable Display",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  font-size: clamp(44px, 8vw, 94px);
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.instructions {
+  margin: 0;
+  color: #d7c8b8;
+  font-size: 15px;
+  line-height: 1.38;
+  font-weight: 650;
+}
+
+.play-area {
+  position: relative;
+  min-height: clamp(340px, 49vh, 600px);
+  border: 1px solid rgba(242, 215, 164, 0.22);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.04)),
+    linear-gradient(180deg, #201914, #111316);
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+  box-shadow: 0 28px 74px rgba(0, 0, 0, 0.46);
+}
+
+.string-lane {
+  position: relative;
+  height: 25%;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  border-bottom: 1px solid rgba(235, 219, 195, 0.12);
+  color: rgba(248, 239, 225, 0.56);
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.string-lane:last-child {
+  border-bottom: 0;
+}
+
+.string-lane::before {
+  content: "";
+  position: absolute;
+  left: 72px;
+  right: 26px;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(249, 225, 181, 0.35), rgba(249, 225, 181, 0.9), rgba(249, 225, 181, 0.35));
+  box-shadow: 0 0 14px rgba(249, 186, 92, 0.12);
+}
+
+.string-lane span {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  font-size: 24px;
+  font-weight: 850;
+}
+
+.string-lane i {
+  position: absolute;
+  left: 72px;
+  top: calc(50% - 10px);
+  width: 10px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(143, 185, 200, 0.42);
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.string-lane.selected {
+  color: #fff7e9;
+  background:
+    linear-gradient(90deg, rgba(143, 185, 200, 0.18), transparent 30%),
+    rgba(185, 111, 54, 0.14);
+}
+
+.string-lane.selected::before {
+  height: 3px;
+  background: linear-gradient(90deg, rgba(248, 227, 190, 0.48), #f7cc82, rgba(143, 185, 200, 0.68));
+  box-shadow:
+    0 0 18px rgba(247, 204, 130, 0.22),
+    0 0 34px rgba(143, 185, 200, 0.12);
+}
+
+.string-lane.selected i {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.bow-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.bow-line span {
+  position: absolute;
+  left: 72px;
+  right: 26px;
+  top: -1px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.36),
+    0 0 30px rgba(143, 185, 200, 0.22);
+}
+
+.note-readout {
+  position: absolute;
+  right: clamp(18px, 3vw, 42px);
+  bottom: clamp(18px, 3vw, 36px);
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.note-name {
+  font-family:
+    "Aptos Display",
+    "Segoe UI Variable Display",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  font-size: clamp(64px, 12vw, 150px);
+  line-height: 0.85;
+  font-weight: 820;
+  color: #fff3dc;
+  text-shadow: 0 22px 58px rgba(0, 0, 0, 0.42);
+}
+
+.note-detail {
+  color: #d7c8b8;
+  font-size: clamp(15px, 2.2vw, 22px);
+  line-height: 1;
+  font-weight: 760;
+}
+
+.state-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.state-item,
+.key-cell,
+.physical-map > div {
+  min-width: 0;
+  border: 1px solid rgba(242, 215, 164, 0.18);
+  border-radius: 8px;
+  background: rgba(21, 22, 25, 0.86);
+}
+
+.state-item {
+  min-height: 88px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 12px;
+}
+
+.state-item span,
+.key-cell span,
+.physical-map span {
+  color: #9f9488;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 790;
+}
+
+.state-item strong {
+  min-width: 0;
+  color: #f8efe1;
+  font-size: clamp(18px, 2vw, 26px);
+  line-height: 1.05;
+  font-weight: 840;
+  overflow-wrap: anywhere;
+}
+
+.state-item.primary strong {
+  color: #f7cc82;
+}
+
+.meter-item {
+  grid-column: span 1;
+}
+
+.volume-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.volume-track i {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8fb9c8, #f7cc82, #d97846);
+  transition: width 60ms linear;
+}
+
+.key-map {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.key-cell {
+  display: grid;
+  gap: 6px;
+  min-height: 70px;
+  align-content: center;
+  padding: 9px;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.key-cell strong,
+.physical-map strong {
+  min-width: 0;
+  color: #f4e6d3;
+  font-size: 14px;
+  line-height: 1.06;
+  font-weight: 820;
+  overflow-wrap: anywhere;
+}
+
+.key-cell.active {
+  border-color: rgba(247, 204, 130, 0.66);
+  background: rgba(185, 111, 54, 0.28);
+}
+
+.physical-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.physical-map > div {
+  display: grid;
+  gap: 6px;
+  min-height: 58px;
+  align-content: center;
+  padding: 10px 12px;
+}
+
+@media (max-width: 860px) {
+  .instrument-head {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .play-area {
+    min-height: 450px;
+  }
+
+  .state-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .meter-item {
+    grid-column: span 1;
+  }
+
+  .key-map {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .physical-map {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 16px 10px 22px;
+  }
+
+  .suite-topbar {
+    margin-bottom: 12px;
+  }
+
+  .suite-home img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .suite-app-name {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 46px;
+  }
+
+  .instructions {
+    font-size: 14px;
+  }
+
+  .play-area {
+    min-height: 410px;
+  }
+
+  .string-lane {
+    padding: 0 14px;
+  }
+
+  .string-lane span {
+    width: 24px;
+    font-size: 20px;
+  }
+
+  .string-lane::before,
+  .string-lane i,
+  .bow-line span {
+    left: 52px;
+    right: 14px;
+  }
+
+  .note-readout {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .note-name {
+    font-size: 70px;
+  }
+
+  .note-detail {
+    max-width: 250px;
+    text-align: right;
+    font-size: 15px;
+  }
+
+  .state-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .state-item {
+    min-height: 78px;
+  }
+
+  .key-map {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .key-cell {
+    min-height: 64px;
+  }
+
+  .physical-map {
+    grid-template-columns: 1fr;
+  }
+}

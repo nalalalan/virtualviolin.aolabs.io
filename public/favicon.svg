@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Virtual Violin icon">
+  <rect width="128" height="128" rx="28" fill="#191511"/>
+  <path d="M31 17c7 7 12 16 15 27 5-4 11-6 18-6 14 0 26 12 26 27 0 17-13 30-30 30-11 0-21-6-27-15-5-8-8-19-8-33 0-11 2-21 6-30Z" fill="#b96f36"/>
+  <path d="M86 39c10 2 18 12 18 25 0 22-20 40-47 46" fill="none" stroke="#6e3f23" stroke-width="9" stroke-linecap="round"/>
+  <path d="M29 104 102 31" stroke="#f2d7a4" stroke-width="7" stroke-linecap="round"/>
+  <path d="M24 98 36 110" stroke="#8fb9c8" stroke-width="5" stroke-linecap="round"/>
+  <path d="M53 22v82M63 21v85M73 24v79M83 31v62" stroke="#2b2018" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="63" cy="66" r="7" fill="#211710"/>
+</svg>
