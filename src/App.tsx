@@ -6,12 +6,10 @@ import {
   getPitchInfo,
   getStringForBowVector,
   isFingerKey,
-  keySignatures,
   positionLabelByName,
   positionNames,
   stringNames,
   type FingerKey,
-  type KeySignature,
   type PositionName,
   type ViolinString,
 } from './pitchMapping'
@@ -22,31 +20,11 @@ const BOW_ON_SPEED = 0.42
 const BOW_HOLD_MS = 260
 const DIRECTION_ATTACK_MS = 95
 
-const staffLineYs = [10, 17, 24, 31, 38] as const
-const sharpStaffYs = [10, 20.5, 6.5, 17, 27.5, 13.5, 24] as const
-const flatStaffYs = [24, 13.5, 27.5, 17, 31, 20.5, 34.5] as const
-
 const bridgeStringMarks: Record<ViolinString, { x: number; y: number; angle: number }> = {
-  G: { x: 18, y: 62, angle: -34 },
-  D: { x: 38, y: 35, angle: -11 },
-  A: { x: 62, y: 35, angle: 11 },
-  E: { x: 82, y: 62, angle: 34 },
-}
-
-function makeKeySignatureMarks(accidental: 'sharp' | 'flat', count: number) {
-  const staffYs = accidental === 'sharp' ? sharpStaffYs : flatStaffYs
-  return staffYs.slice(0, count).map((y) => ({ accidental, y }))
-}
-
-const keySignatureMarks: Record<KeySignature, Array<{ accidental: 'sharp' | 'flat'; y: number }>> = {
-  C: [],
-  G: makeKeySignatureMarks('sharp', 1),
-  D: makeKeySignatureMarks('sharp', 2),
-  A: makeKeySignatureMarks('sharp', 3),
-  E: makeKeySignatureMarks('sharp', 4),
-  F: makeKeySignatureMarks('flat', 1),
-  Bb: makeKeySignatureMarks('flat', 2),
-  Eb: makeKeySignatureMarks('flat', 3),
+  G: { x: 18, y: 62, angle: 30 },
+  D: { x: 38, y: 35, angle: 10 },
+  A: { x: 62, y: 35, angle: -10 },
+  E: { x: 82, y: 62, angle: -30 },
 }
 
 interface InstrumentState {
@@ -59,7 +37,6 @@ interface InstrumentState {
   direction: BowDirection
   vibrato: boolean
   position: PositionName
-  keySignature: KeySignature
 }
 
 const initialState: InstrumentState = {
@@ -72,7 +49,6 @@ const initialState: InstrumentState = {
   direction: 0,
   vibrato: false,
   position: 'first',
-  keySignature: 'D',
 }
 
 function App() {
@@ -104,7 +80,7 @@ function App() {
     const bowSpeed = current.contact && current.rawSpeed > 0 && age < BOW_HOLD_MS ? BOW_ON_SPEED : 0
     const attackAge = now - lastDirectionChangeTimeRef.current
     const acceleration = current.acceleration > 0 && attackAge < DIRECTION_ATTACK_MS ? current.acceleration : 0
-    const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position, current.keySignature)
+    const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position)
 
     if (Math.abs(bowSpeed - current.bowSpeed) > 0.004 || current.acceleration !== acceleration) {
       stateRef.current.bowSpeed = bowSpeed
@@ -427,29 +403,6 @@ function App() {
 
   const positionLabel = positionLabelByName[instrumentState.position]
 
-  function renderKeySignature(signature: KeySignature) {
-    return (
-      <svg className="key-staff" viewBox="0 0 82 48" aria-hidden="true">
-        {staffLineYs.map((y) => (
-          <line className="staff-line" x1="6" x2="76" y1={y} y2={y} key={y} />
-        ))}
-        <text className="key-clef" x="16" y="27">
-          {'\uD834\uDD1E'}
-        </text>
-        {keySignatureMarks[signature].map((mark, index) => (
-          <text
-            className="key-accidental"
-            x={36 + index * 8.75}
-            y={mark.y}
-            key={`${mark.accidental}-${index}`}
-          >
-            {mark.accidental === 'sharp' ? '\u266F' : '\u266D'}
-          </text>
-        ))}
-      </svg>
-    )
-  }
-
   return (
     <main className="app-shell">
       <header className="suite-topbar" aria-label="Virtual Violin navigation">
@@ -499,23 +452,6 @@ function App() {
           </aside>
         </div>
 
-        <section className="key-signature-strip" aria-label="Key signature">
-          {keySignatures.map((signature) => (
-            <button
-              className={signature === instrumentState.keySignature ? 'active' : ''}
-              key={signature}
-              type="button"
-              aria-label={`${signature} key signature`}
-              title={`${signature} key signature`}
-              onClick={() => {
-                renderInstrumentState({ keySignature: signature })
-                syncEngineNow()
-              }}
-            >
-              {renderKeySignature(signature)}
-            </button>
-          ))}
-        </section>
       </section>
     </main>
   )

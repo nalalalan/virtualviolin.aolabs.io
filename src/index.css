@@ -150,70 +150,6 @@ a {
   font-weight: 860;
 }
 
-.key-signature-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: min(100%, 760px);
-  margin-top: 12px;
-  margin-right: auto;
-  margin-left: auto;
-}
-
-.key-signature-strip button {
-  width: 76px;
-  height: 52px;
-  border: 1px solid rgba(242, 215, 164, 0.18);
-  border-radius: 8px;
-  background: rgba(21, 22, 25, 0.86);
-  color: #d7c8b8;
-  cursor: pointer;
-  padding: 0;
-}
-
-.key-signature-strip button.active {
-  border-color: rgba(247, 204, 130, 0.66);
-  background: rgba(185, 111, 54, 0.28);
-  color: #f7cc82;
-}
-
-.key-staff {
-  display: block;
-  width: 76px;
-  height: 44px;
-  margin: 2px auto 0;
-  overflow: visible;
-}
-
-.staff-line {
-  stroke: rgba(248, 239, 225, 0.44);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.key-clef,
-.key-accidental {
-  font-family:
-    "Segoe UI Symbol",
-    "Noto Music",
-    "Bravura",
-    serif;
-  color: #f4e6d3;
-  fill: #f4e6d3;
-  line-height: 1;
-  dominant-baseline: middle;
-  text-anchor: middle;
-}
-
-.key-clef {
-  font-size: 35px;
-}
-
-.key-accidental {
-  font-size: 19px;
-  font-weight: 780;
-}
-
 @media (max-width: 860px) {
   .player-region {
     grid-template-columns: minmax(0, 1fr) 72px;
@@ -249,19 +185,6 @@ a {
 
   .play-area {
     min-height: 640px;
-  }
-
-  .string-lane {
-    padding: 18px 8px;
-  }
-
-  .string-lane span {
-    font-size: 20px;
-  }
-
-  .string-lane::before {
-    top: 60px;
-    bottom: 14px;
   }
 
   .position-readout {

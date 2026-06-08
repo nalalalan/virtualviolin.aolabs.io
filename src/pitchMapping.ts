@@ -1,20 +1,18 @@
 export const stringNames = ['G', 'D', 'A', 'E'] as const
-export const keySignatures = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb'] as const
 export const positionNames = ['first', 'third', 'fifth', 'seventh'] as const
 
 export type ViolinString = (typeof stringNames)[number]
 export type FingerKey = 'j' | 'h' | 'g' | 'f' | 'd' | 's' | 'a'
 export type PositionName = (typeof positionNames)[number]
-export type KeySignature = (typeof keySignatures)[number]
 
 export const fingerKeys: FingerKey[] = ['j', 'h', 'g', 'f', 'd', 's', 'a']
 export const keyStrip = ['open', ...fingerKeys] as const
 
 export const stringAngleByName: Record<ViolinString, number> = {
-  G: -34,
-  D: -11,
-  A: 11,
-  E: 34,
+  G: 30,
+  D: 10,
+  A: -10,
+  E: -30,
 }
 
 export const positionLabelByName: Record<PositionName, string> = {
@@ -31,20 +29,7 @@ const baseMidiByString: Record<ViolinString, number> = {
   E: 76,
 }
 
-const tonicPitchClassByKey: Record<KeySignature, number> = {
-  C: 0,
-  G: 7,
-  D: 2,
-  A: 9,
-  E: 4,
-  F: 5,
-  Bb: 10,
-  Eb: 3,
-}
-
 const sharpNoteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
-const flatNoteNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const
-const flatKeys = new Set<KeySignature>(['F', 'Bb', 'Eb'])
 const positionLowFingerOffset: Record<PositionName, number> = {
   first: 1,
   third: 4,
@@ -90,7 +75,7 @@ export function normalizeBowAngle(angle: number): number {
 }
 
 export function getBowAngleForVector(dx: number, dy: number): number {
-  return normalizeBowAngle((Math.atan2(dx, dy) * 180) / Math.PI)
+  return normalizeBowAngle((-Math.atan2(dy, dx) * 180) / Math.PI)
 }
 
 export function getStringForBowVector(dx: number, dy: number, fallback: ViolinString = 'A'): ViolinString {
@@ -115,34 +100,15 @@ export function getStringForBowVector(dx: number, dy: number, fallback: ViolinSt
 
 export function getBowDirectionForString(dx: number, dy: number, stringName: ViolinString): -1 | 1 {
   const angle = (stringAngleByName[stringName] * Math.PI) / 180
-  const projection = dx * Math.sin(angle) + dy * Math.cos(angle)
+  const projection = dx * Math.cos(angle) - dy * Math.sin(angle)
   return projection < 0 ? -1 : 1
 }
 
-export function getScaleOffsets(openMidi: number, keySignature: KeySignature): number[] {
-  const tonic = tonicPitchClassByKey[keySignature]
-  const majorScaleSteps = [0, 2, 4, 5, 7, 9, 11]
-  const scalePitchClasses = new Set(majorScaleSteps.map((step) => (tonic + step) % 12))
-  const offsets: number[] = []
-
-  for (let offset = 1; offsets.length < 12 && offset <= 36; offset += 1) {
-    if (scalePitchClasses.has((openMidi + offset) % 12)) {
-      offsets.push(offset)
-    }
-  }
-
-  return offsets
-}
-
 export function getOffsetForKey(
-  stringName: ViolinString,
+  _stringName: ViolinString,
   key: FingerKey | null,
   position: PositionName = 'first',
-  keySignature: KeySignature = 'D',
 ): number {
-  void stringName
-  void keySignature
-
   if (key === null) {
     return 0
   }
@@ -150,20 +116,19 @@ export function getOffsetForKey(
   return positionLowFingerOffset[position] + fingerIndexByKey[key]
 }
 
-export function getNoteName(midi: number, keySignature: KeySignature): string {
+export function getNoteName(midi: number): string {
   const pitchClass = ((midi % 12) + 12) % 12
-  return (flatKeys.has(keySignature) ? flatNoteNames : sharpNoteNames)[pitchClass]
+  return sharpNoteNames[pitchClass]
 }
 
 export function getPitchInfo(
   stringName: ViolinString,
   key: FingerKey | null,
   position: PositionName = 'first',
-  keySignature: KeySignature = 'D',
 ): PitchInfo {
-  const offset = getOffsetForKey(stringName, key, position, keySignature)
+  const offset = getOffsetForKey(stringName, key, position)
   const midi = baseMidiByString[stringName] + offset
-  const noteName = getNoteName(midi, keySignature)
+  const noteName = getNoteName(midi)
   const frequency = 440 * 2 ** ((midi - 69) / 12)
 
   return {
@@ -176,7 +141,7 @@ export function getPitchInfo(
     mappingText:
       key === null
         ? `${stringName} string open = ${noteName}`
-        : `${stringName} ${positionLabelByName[position]} position + ${key.toUpperCase()} = ${noteName} (${keySignature})`,
+        : `${stringName} ${positionLabelByName[position]} position + ${key.toUpperCase()} = ${noteName}`,
   }
 }
 
