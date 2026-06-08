@@ -30,9 +30,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(179, 97, 49, 0.16), transparent 32%),
-    #0d0d0f;
+  background: #0d0d0f;
 }
 
 button,
@@ -108,13 +106,10 @@ a {
   border: 1px solid rgba(242, 215, 164, 0.22);
   border-radius: 8px;
   overflow: hidden;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.04)),
-    linear-gradient(180deg, #201914, #111316);
+  background: #111316;
   cursor: crosshair;
   user-select: none;
   touch-action: none;
-  box-shadow: 0 28px 74px rgba(0, 0, 0, 0.46);
 }
 
 .string-lane {
@@ -126,9 +121,6 @@ a {
   padding: 22px 12px;
   border-right: 1px solid rgba(235, 219, 195, 0.12);
   color: rgba(248, 239, 225, 0.56);
-  transition:
-    background 120ms ease,
-    color 120ms ease;
 }
 
 .string-lane:last-child {
@@ -143,8 +135,7 @@ a {
   left: 50%;
   width: 2px;
   transform: translateX(-50%);
-  background: linear-gradient(180deg, rgba(249, 225, 181, 0.35), rgba(249, 225, 181, 0.9), rgba(249, 225, 181, 0.35));
-  box-shadow: 0 0 14px rgba(249, 186, 92, 0.12);
+  background: rgba(249, 225, 181, 0.76);
 }
 
 .string-lane span {
@@ -153,41 +144,6 @@ a {
   width: auto;
   font-size: 24px;
   font-weight: 850;
-}
-
-.string-lane i {
-  position: absolute;
-  left: calc(50% - 10px);
-  top: 72px;
-  width: 20px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(143, 185, 200, 0.42);
-  opacity: 0;
-  transform: scale(0.85);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
-}
-
-.string-lane.selected {
-  color: #fff7e9;
-  background:
-    linear-gradient(180deg, rgba(143, 185, 200, 0.18), transparent 30%),
-    rgba(185, 111, 54, 0.14);
-}
-
-.string-lane.selected::before {
-  width: 3px;
-  background: linear-gradient(180deg, rgba(248, 227, 190, 0.48), #f7cc82, rgba(143, 185, 200, 0.68));
-  box-shadow:
-    0 0 18px rgba(247, 204, 130, 0.22),
-    0 0 34px rgba(143, 185, 200, 0.12);
-}
-
-.string-lane.selected i {
-  opacity: 1;
-  transform: scale(1);
 }
 
 .position-readout {
@@ -320,12 +276,6 @@ a {
   .string-lane::before {
     top: 60px;
     bottom: 14px;
-  }
-
-  .string-lane i {
-    left: calc(50% - 9px);
-    top: 60px;
-    width: 18px;
   }
 
   .position-readout {

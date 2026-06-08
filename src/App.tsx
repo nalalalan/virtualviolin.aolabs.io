@@ -169,15 +169,11 @@ function App() {
 
   function updateStringFromPointer(clientX: number) {
     const pointerRatio = getPointerRatio(clientX)
-    const previousString = stateRef.current.selectedString
     const directString = getStringForRatio(pointerRatio)
     const selectedString = getStableStringForRatio(pointerRatio)
     mergeInstrumentRef({ pointerRatio, selectedString })
-    if (selectedString !== previousString) {
-      renderInstrumentState({ pointerRatio, selectedString })
-    }
 
-    return { directString, previousString, selectedString }
+    return { directString, selectedString }
   }
 
   function startAudioFromGesture() {
@@ -524,12 +520,8 @@ function App() {
             onContextMenu={handlePlayAreaContextMenu}
           >
             {stringNames.map((stringName) => (
-              <div
-                className={stringName === instrumentState.selectedString ? 'string-lane selected' : 'string-lane'}
-                key={stringName}
-              >
+              <div className="string-lane" key={stringName}>
                 <span>{stringName}</span>
-                <i aria-hidden="true" />
               </div>
             ))}
           </section>
