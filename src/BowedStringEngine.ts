@@ -20,6 +20,7 @@ export class BowedStringEngine {
   private panner: StereoPannerNode | null = null
   private vibratoGain: GainNode | null = null
   private lastString: ViolinString = 'A'
+  private lastDirection: -1 | 0 | 1 = 0
 
   async resume(): Promise<AudioContextState> {
     this.ensureNodes()
@@ -44,7 +45,9 @@ export class BowedStringEngine {
     const now = this.context.currentTime
     const bowing = state.contact && state.speed > 0.004
     const speed = Math.min(1, Math.max(0, state.speed))
-    const attackEdge = Math.min(1, Math.max(0, state.acceleration))
+    const directionChanged =
+      bowing && state.direction !== 0 && this.lastDirection !== 0 && state.direction !== this.lastDirection
+    const attackEdge = directionChanged ? 1 : Math.min(1, Math.max(0, state.acceleration))
     const targetGain = bowing ? 0.045 + speed * 0.28 + attackEdge * 0.065 : 0
     const bodyBlend = bowing ? 0.026 + speed * 0.13 : 0
     const brightness = this.getStringBrightness(state.stringName)
@@ -52,8 +55,18 @@ export class BowedStringEngine {
 
     this.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012)
     this.bodyOscillator.frequency.setTargetAtTime(state.frequency / 2, now, 0.018)
-    this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.018 : 0.05)
-    this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.03 : 0.06)
+    if (directionChanged) {
+      const restartAt = now + 0.035
+      this.gain.gain.cancelScheduledValues(now)
+      this.bodyGain.gain.cancelScheduledValues(now)
+      this.gain.gain.setTargetAtTime(0, now, 0.006)
+      this.bodyGain.gain.setTargetAtTime(0, now, 0.008)
+      this.gain.gain.setTargetAtTime(targetGain + 0.025, restartAt, 0.012)
+      this.bodyGain.gain.setTargetAtTime(bodyBlend + 0.012, restartAt, 0.018)
+    } else {
+      this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.018 : 0.05)
+      this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.03 : 0.06)
+    }
     this.filter.frequency.setTargetAtTime(850 + brightness + speed * 1300 + attackEdge * 700, now, 0.045)
     this.filter.Q.setTargetAtTime(1.1 + speed * 2.6, now, 0.06)
 
@@ -66,6 +79,9 @@ export class BowedStringEngine {
     }
 
     this.lastString = state.stringName
+    if (bowing && state.direction !== 0) {
+      this.lastDirection = state.direction
+    }
   }
 
   stop(): void {
@@ -76,6 +92,7 @@ export class BowedStringEngine {
     const now = this.context.currentTime
     this.gain.gain.setTargetAtTime(0, now, 0.045)
     this.bodyGain.gain.setTargetAtTime(0, now, 0.055)
+    this.lastDirection = 0
   }
 
   private ensureNodes(): void {

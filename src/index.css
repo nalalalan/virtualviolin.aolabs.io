@@ -128,13 +128,21 @@ h1 {
   font-weight: 650;
 }
 
+.player-region {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px;
+  width: min(100%, 760px);
+  margin: 0 auto;
+  align-items: stretch;
+}
+
 .play-area {
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  width: min(100%, 760px);
+  width: 100%;
   min-height: clamp(500px, 64vh, 760px);
-  margin: 0 auto;
   border: 1px solid rgba(242, 215, 164, 0.22);
   border-radius: 8px;
   overflow: hidden;
@@ -276,36 +284,35 @@ h1 {
     0 0 30px rgba(143, 185, 200, 0.22);
 }
 
-.note-readout {
-  position: absolute;
-  right: clamp(18px, 3vw, 42px);
-  bottom: clamp(18px, 3vw, 36px);
+.position-readout {
+  min-width: 0;
+  border: 1px solid rgba(242, 215, 164, 0.18);
+  border-radius: 8px;
+  background: rgba(21, 22, 25, 0.86);
+}
+
+.position-readout {
   display: grid;
-  justify-items: end;
-  gap: 4px;
-  pointer-events: none;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.note-name {
-  font-family:
-    "Aptos Display",
-    "Segoe UI Variable Display",
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
-  font-size: clamp(64px, 12vw, 150px);
-  line-height: 0.85;
-  font-weight: 820;
-  color: #fff3dc;
-  text-shadow: 0 22px 58px rgba(0, 0, 0, 0.42);
-}
-
-.note-detail {
-  color: #d7c8b8;
-  font-size: clamp(15px, 2.2vw, 22px);
+.position-readout span {
+  color: #9f9488;
+  font-size: 12px;
   line-height: 1;
-  font-weight: 760;
+  font-weight: 790;
+}
+
+.position-readout strong {
+  color: #f7cc82;
+  font-size: clamp(32px, 5vw, 58px);
+  line-height: 0.95;
+  font-weight: 860;
 }
 
 .key-signature-strip {
@@ -319,16 +326,14 @@ h1 {
 }
 
 .key-signature-strip button {
-  min-width: 50px;
+  width: 76px;
+  height: 52px;
   border: 1px solid rgba(242, 215, 164, 0.18);
   border-radius: 8px;
   background: rgba(21, 22, 25, 0.86);
   color: #d7c8b8;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 840;
-  line-height: 1;
-  padding: 11px 13px;
+  padding: 0;
 }
 
 .key-signature-strip button.active {
@@ -337,9 +342,48 @@ h1 {
   color: #f7cc82;
 }
 
+.key-staff {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 42px;
+  margin: 4px auto 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 7px,
+    rgba(248, 239, 225, 0.42) 7px,
+    rgba(248, 239, 225, 0.42) 8px
+  );
+  background-size: 100% 8px;
+}
+
+.key-clef,
+.key-accidental {
+  position: absolute;
+  font-family:
+    "Segoe UI Symbol",
+    "Noto Music",
+    "Bravura",
+    serif;
+  color: #f4e6d3;
+  line-height: 1;
+}
+
+.key-clef {
+  left: 2px;
+  top: 0;
+  font-size: 36px;
+}
+
+.key-accidental {
+  font-size: 20px;
+  font-weight: 780;
+}
+
 .state-grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
   margin-top: 12px;
 }
@@ -458,6 +502,10 @@ h1 {
     align-items: start;
   }
 
+  .player-region {
+    grid-template-columns: minmax(0, 1fr) 84px;
+  }
+
   .play-area {
     min-height: 560px;
   }
@@ -505,6 +553,11 @@ h1 {
     font-size: 14px;
   }
 
+  .player-region {
+    grid-template-columns: minmax(0, 1fr) 68px;
+    gap: 8px;
+  }
+
   .play-area {
     min-height: 500px;
   }
@@ -535,19 +588,12 @@ h1 {
     width: 18px;
   }
 
-  .note-readout {
-    right: 16px;
-    bottom: 16px;
+  .position-readout {
+    padding: 10px 8px;
   }
 
-  .note-name {
-    font-size: 70px;
-  }
-
-  .note-detail {
-    max-width: 250px;
-    text-align: right;
-    font-size: 15px;
+  .position-readout strong {
+    font-size: 34px;
   }
 
   .state-grid {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { BowedStringEngine } from './BowedStringEngine'
 import {
   getFingerLabel,
@@ -8,6 +8,8 @@ import {
   isFingerKey,
   keySignatures,
   keyStrip,
+  positionLabelByName,
+  positionNames,
   stringNames,
   type FingerKey,
   type KeySignature,
@@ -21,6 +23,36 @@ const STRING_BOUNDARY_GRACE = 0.055
 const MOTION_MOVE_PIXELS = 0.75
 const BOW_ON_SPEED = 0.42
 const BOW_HOLD_MS = 260
+const DIRECTION_ATTACK_MS = 95
+const keySignatureMarks: Record<KeySignature, Array<{ symbol: '♯' | '♭'; top: number }>> = {
+  C: [],
+  G: [{ symbol: '♯', top: 7 }],
+  D: [
+    { symbol: '♯', top: 7 },
+    { symbol: '♯', top: 20 },
+  ],
+  A: [
+    { symbol: '♯', top: 7 },
+    { symbol: '♯', top: 20 },
+    { symbol: '♯', top: 27 },
+  ],
+  E: [
+    { symbol: '♯', top: 7 },
+    { symbol: '♯', top: 20 },
+    { symbol: '♯', top: 27 },
+    { symbol: '♯', top: 14 },
+  ],
+  F: [{ symbol: '♭', top: 23 }],
+  Bb: [
+    { symbol: '♭', top: 23 },
+    { symbol: '♭', top: 12 },
+  ],
+  Eb: [
+    { symbol: '♭', top: 23 },
+    { symbol: '♭', top: 12 },
+    { symbol: '♭', top: 27 },
+  ],
+}
 
 interface InstrumentState {
   selectedString: ViolinString
@@ -60,6 +92,8 @@ function App() {
   const lastPointerRef = useRef<{ x: number; y: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
   const motionStopTimerRef = useRef<number | null>(null)
+  const lastBowDirectionRef = useRef<BowDirection>(0)
+  const lastDirectionChangeTimeRef = useRef(-100000)
   const audioResumeInFlightRef = useRef(false)
   const audioUnlockedRef = useRef(false)
 
@@ -103,6 +137,17 @@ function App() {
       engineRef.current?.stop()
       motionStopTimerRef.current = null
     }, BOW_HOLD_MS)
+  }
+
+  function getPositionStep(currentPosition: PositionName, delta: -1 | 1) {
+    const currentIndex = positionNames.indexOf(currentPosition)
+    const nextIndex = Math.min(positionNames.length - 1, Math.max(0, currentIndex + delta))
+    return positionNames[nextIndex]
+  }
+
+  function stepPosition(delta: -1 | 1) {
+    const position = getPositionStep(stateRef.current.position, delta)
+    updateInstrumentState({ position })
   }
 
   function getPointerRatio(clientX: number) {
@@ -196,6 +241,7 @@ function App() {
     updateStringFromPointer(clientX)
     lastPointerRef.current = { x: clientX, y: clientY, time: now, speed: 0 }
     lastMovementTimeRef.current = now
+    lastBowDirectionRef.current = 0
     updateInstrumentState({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
   }
 
@@ -214,7 +260,13 @@ function App() {
 
   function handlePlayAreaClick() {
     startAudioFromGesture()
-    updateInstrumentState({ position: stateRef.current.position === 'first' ? 'third' : 'first' })
+    stepPosition(1)
+  }
+
+  function handlePlayAreaContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    event.preventDefault()
+    startAudioFromGesture()
+    stepPosition(-1)
   }
 
   function handlePointerEnter(event: ReactPointerEvent<HTMLElement>) {
@@ -247,16 +299,36 @@ function App() {
       return
     }
 
-    const direction: BowDirection = Math.abs(dx) < 0.5 ? stateRef.current.direction : dx < 0 ? -1 : 1
+    const direction: BowDirection = Math.abs(dx) < 0.5 ? lastBowDirectionRef.current : dx < 0 ? -1 : 1
+    const previousDirection = lastBowDirectionRef.current
+    const reversedDirection = previousDirection !== 0 && direction !== 0 && direction !== previousDirection
 
     lastMovementTimeRef.current = now
     lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: BOW_ON_SPEED }
     scheduleMotionStop(now)
+
+    if (reversedDirection) {
+      lastBowDirectionRef.current = direction
+      lastDirectionChangeTimeRef.current = now
+      updateInstrumentState({
+        contact: true,
+        rawSpeed: BOW_ON_SPEED,
+        bowSpeed: BOW_ON_SPEED,
+        acceleration: 1,
+        direction,
+      })
+      return
+    }
+
+    if (direction !== 0) {
+      lastBowDirectionRef.current = direction
+    }
+
     updateInstrumentState({
       contact: true,
       rawSpeed: BOW_ON_SPEED,
       bowSpeed: BOW_ON_SPEED,
-      acceleration: 0,
+      acceleration: previousDirection === 0 && direction !== 0 ? 0.55 : 0,
       direction,
     })
   }
@@ -285,6 +357,7 @@ function App() {
 
     engineRef.current?.stop()
     clearMotionStopTimer()
+    lastBowDirectionRef.current = 0
     lastPointerRef.current = null
     updateInstrumentState({ contact: false, rawSpeed: 0, bowSpeed: 0, acceleration: 0 })
   }
@@ -309,6 +382,7 @@ function App() {
       if (!insidePlayArea) {
         engineRef.current?.stop()
         clearMotionStopTimer()
+        lastBowDirectionRef.current = 0
         lastPointerRef.current = null
         setInstrumentState((current) => {
           const next = { ...current, contact: false, rawSpeed: 0, bowSpeed: 0, acceleration: 0 }
@@ -376,7 +450,8 @@ function App() {
       const current = stateRef.current
       const age = now - lastMovementTimeRef.current
       const bowSpeed = current.contact && current.rawSpeed > 0 && age < BOW_HOLD_MS ? BOW_ON_SPEED : 0
-      const acceleration = 0
+      const attackAge = now - lastDirectionChangeTimeRef.current
+      const acceleration = current.acceleration > 0 && attackAge < DIRECTION_ATTACK_MS ? current.acceleration : 0
       const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position, current.keySignature)
 
       if (Math.abs(bowSpeed - current.bowSpeed) > 0.004 || (!current.contact && current.bowSpeed !== 0)) {
@@ -407,6 +482,7 @@ function App() {
   const bowing = instrumentState.bowSpeed > 0
   const bowPercent = bowing ? 100 : 0
   const playheadLeft = `${instrumentState.pointerRatio * 100}%`
+  const positionLabel = positionLabelByName[instrumentState.position]
   const audioText =
     audioStatus === 'on' ? 'sound on' : audioStatus === 'starting' ? 'starting' : audioStatus === 'blocked' ? 'blocked' : 'sound locked'
 
@@ -430,54 +506,63 @@ function App() {
           </div>
           <p className="instructions">
             Strings run left to right: G D A E. Move inside one lane to sound it. Use F D S A for fingers. Left click
-            toggles first and third position.
+            steps up. Right click steps down.
           </p>
         </div>
 
-        <section
-          className="play-area"
-          ref={playAreaRef}
-          role="application"
-          aria-label="Mouse bowing surface. Left to right strings are G, D, A, and E."
-          onPointerDown={handlePointerDown}
-          onPointerEnter={handlePointerEnter}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={stopBowContact}
-          onPointerLeave={stopBowContact}
-          onClick={handlePlayAreaClick}
-        >
-          {audioStatus !== 'on' && (
-            <div className="sound-unlock" aria-live="polite">
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  startAudioFromGesture()
-                }}
+        <div className="player-region">
+          <section
+            className="play-area"
+            ref={playAreaRef}
+            role="application"
+            aria-label="Mouse bowing surface. Left to right strings are G, D, A, and E."
+            onPointerDown={handlePointerDown}
+            onPointerEnter={handlePointerEnter}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={stopBowContact}
+            onPointerLeave={stopBowContact}
+            onClick={handlePlayAreaClick}
+            onContextMenu={handlePlayAreaContextMenu}
+          >
+            {audioStatus !== 'on' && (
+              <div className="sound-unlock" aria-live="polite">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    startAudioFromGesture()
+                  }}
+                >
+                  {audioStatus === 'blocked' ? 'Retry sound' : 'Start sound'}
+                </button>
+                <span>{audioStatus === 'blocked' ? 'browser blocked audio' : 'one click, no hold'}</span>
+              </div>
+            )}
+            {stringNames.map((stringName) => (
+              <div
+                className={stringName === instrumentState.selectedString ? 'string-lane selected' : 'string-lane'}
+                key={stringName}
               >
-                {audioStatus === 'blocked' ? 'Retry sound' : 'Start sound'}
-              </button>
-              <span>{audioStatus === 'blocked' ? 'browser blocked audio' : 'one click, no hold'}</span>
+                <span>{stringName}</span>
+                <i aria-hidden="true" />
+              </div>
+            ))}
+            <div className="bow-line" style={{ left: playheadLeft }} aria-hidden="true">
+              <span />
             </div>
-          )}
-          {stringNames.map((stringName) => (
-            <div
-              className={stringName === instrumentState.selectedString ? 'string-lane selected' : 'string-lane'}
-              key={stringName}
-            >
-              <span>{stringName}</span>
-              <i aria-hidden="true" />
-            </div>
-          ))}
-          <div className="bow-line" style={{ left: playheadLeft }} aria-hidden="true">
-            <span />
-          </div>
-          <div className="note-readout" aria-live="polite">
-            <span className="note-name">{pitch.noteName}</span>
-            <span className="note-detail">{pitch.mappingText}</span>
-          </div>
-        </section>
+          </section>
+
+          <aside
+            className="position-readout"
+            aria-live="polite"
+            onClick={handlePlayAreaClick}
+            onContextMenu={handlePlayAreaContextMenu}
+          >
+            <span>position</span>
+            <strong>{positionLabel}</strong>
+          </aside>
+        </div>
 
         <section className="key-signature-strip" aria-label="Key signature">
           {keySignatures.map((signature) => (
@@ -485,9 +570,22 @@ function App() {
               className={signature === instrumentState.keySignature ? 'active' : ''}
               key={signature}
               type="button"
+              aria-label={`${signature} key signature`}
+              title={`${signature} key signature`}
               onClick={() => updateInstrumentState({ keySignature: signature })}
             >
-              {signature}
+              <span className="key-staff" aria-hidden="true">
+                <span className="key-clef">𝄞</span>
+                {keySignatureMarks[signature].map((mark, index) => (
+                  <span
+                    className="key-accidental"
+                    key={`${mark.symbol}-${index}`}
+                    style={{ left: `${34 + index * 10}px`, top: `${mark.top}px` }}
+                  >
+                    {mark.symbol}
+                  </span>
+                ))}
+              </span>
             </button>
           ))}
         </section>
@@ -497,17 +595,13 @@ function App() {
             <span>string</span>
             <strong>{pitch.stringName}</strong>
           </div>
-          <div className="state-item primary">
-            <span>note</span>
-            <strong>{pitch.noteName}</strong>
-          </div>
           <div className="state-item">
             <span>finger</span>
             <strong>{activeKeyLabel}</strong>
           </div>
           <div className="state-item">
             <span>position</span>
-            <strong>{instrumentState.position}</strong>
+            <strong>{positionLabel}</strong>
           </div>
           <div className="state-item">
             <span>bow</span>
@@ -533,18 +627,11 @@ function App() {
         <section className="key-map" aria-label="Finger key mapping">
           {keyStrip.map((keyLabel) => {
             const key = keyLabel === 'open' ? null : (keyLabel as FingerKey)
-            const keyPitch = getPitchInfo(
-              instrumentState.selectedString,
-              key,
-              instrumentState.position,
-              instrumentState.keySignature,
-            )
             const active = key === instrumentState.fingerKey
 
             return (
               <div className={active ? 'key-cell active' : 'key-cell'} key={keyLabel}>
                 <span>{keyLabel}</span>
-                <strong>{keyPitch.noteName}</strong>
               </div>
             )
           })}
@@ -565,7 +652,7 @@ function App() {
           </div>
           <div>
             <span>click</span>
-            <strong>{instrumentState.position} position</strong>
+            <strong>{positionLabel} position</strong>
           </div>
         </section>
       </section>

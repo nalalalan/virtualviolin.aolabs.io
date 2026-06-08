@@ -1,13 +1,21 @@
 export const stringNames = ['G', 'D', 'A', 'E'] as const
 export const keySignatures = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb'] as const
+export const positionNames = ['first', 'third', 'fifth', 'seventh'] as const
 
 export type ViolinString = (typeof stringNames)[number]
 export type FingerKey = 'f' | 'd' | 's' | 'a'
-export type PositionName = 'first' | 'third'
+export type PositionName = (typeof positionNames)[number]
 export type KeySignature = (typeof keySignatures)[number]
 
 export const fingerKeys: FingerKey[] = ['f', 'd', 's', 'a']
 export const keyStrip = ['open', ...fingerKeys] as const
+
+export const positionLabelByName: Record<PositionName, string> = {
+  first: '1st',
+  third: '3rd',
+  fifth: '5th',
+  seventh: '7th',
+}
 
 const baseMidiByString: Record<ViolinString, number> = {
   G: 55,
@@ -42,6 +50,8 @@ const fingerIndexByKey: Record<FingerKey, number> = {
 const positionScaleStart: Record<PositionName, number> = {
   first: 0,
   third: 2,
+  fifth: 4,
+  seventh: 6,
 }
 
 export interface PitchInfo {
@@ -68,7 +78,7 @@ export function getScaleOffsets(openMidi: number, keySignature: KeySignature): n
   const scalePitchClasses = new Set(majorScaleSteps.map((step) => (tonic + step) % 12))
   const offsets: number[] = []
 
-  for (let offset = 1; offsets.length < 7 && offset <= 24; offset += 1) {
+  for (let offset = 1; offsets.length < 12 && offset <= 36; offset += 1) {
     if (scalePitchClasses.has((openMidi + offset) % 12)) {
       offsets.push(offset)
     }
@@ -118,7 +128,7 @@ export function getPitchInfo(
     mappingText:
       key === null
         ? `${stringName} string open = ${noteName}`
-        : `${stringName} ${position} position + ${key.toUpperCase()} = ${noteName} (${keySignature})`,
+        : `${stringName} ${positionLabelByName[position]} position + ${key.toUpperCase()} = ${noteName} (${keySignature})`,
   }
 }
 
