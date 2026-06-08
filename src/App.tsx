@@ -27,10 +27,10 @@ const sharpStaffYs = [10, 20.5, 6.5, 17, 27.5, 13.5, 24] as const
 const flatStaffYs = [24, 13.5, 27.5, 17, 31, 20.5, 34.5] as const
 
 const bridgeStringMarks: Record<ViolinString, { x: number; y: number; angle: number }> = {
-  G: { x: 17.5, y: 48, angle: -34 },
-  D: { x: 38.5, y: 29, angle: -11 },
-  A: { x: 61.5, y: 29, angle: 11 },
-  E: { x: 82.5, y: 48, angle: 34 },
+  G: { x: 18, y: 62, angle: -34 },
+  D: { x: 38, y: 35, angle: -11 },
+  A: { x: 62, y: 35, angle: 11 },
+  E: { x: 82, y: 62, angle: 34 },
 }
 
 function makeKeySignatureMarks(accidental: 'sharp' | 'flat', count: number) {
@@ -450,25 +450,6 @@ function App() {
     )
   }
 
-  function renderBridgeStringLine(stringName: ViolinString) {
-    const mark = bridgeStringMarks[stringName]
-    const angle = (mark.angle * Math.PI) / 180
-    const length = 28
-    const dx = Math.sin(angle) * length
-    const dy = Math.cos(angle) * length
-
-    return (
-      <line
-        className="bridge-string-guide"
-        x1={mark.x - dx}
-        y1={mark.y - dy}
-        x2={mark.x + dx}
-        y2={mark.y + dy}
-        key={`${stringName}-guide`}
-      />
-    )
-  }
-
   return (
     <main className="app-shell">
       <header className="suite-topbar" aria-label="Virtual Violin navigation">
@@ -498,17 +479,11 @@ function App() {
             onContextMenu={handlePlayAreaContextMenu}
           >
             <svg className="bridge-view" viewBox="0 0 100 100" aria-hidden="true">
-              <path className="bridge-curve" d="M12 49 C25 18 39 20 50 25 C61 20 75 18 88 49" />
-              {stringNames.map(renderBridgeStringLine)}
+              <path className="bridge-curve" d="M14 62 C28 25 72 25 86 62" />
               {stringNames.map((stringName) => {
                 const mark = bridgeStringMarks[stringName]
                 return (
-                  <g className="bridge-string-point" key={stringName}>
-                    <circle cx={mark.x} cy={mark.y} r="4.6" />
-                    <text x={mark.x} y={mark.y + 13}>
-                      {stringName}
-                    </text>
-                  </g>
+                  <circle className="bridge-string-point" cx={mark.x} cy={mark.y} r="4.8" key={stringName} />
                 )
               })}
             </svg>
