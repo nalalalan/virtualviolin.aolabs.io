@@ -17,6 +17,8 @@ export const stringAngleByName: Record<ViolinString, number> = {
 
 const stringSwitchHysteresisDegrees = 7
 const adjacentStringBoundaryAngles = [20, 0, -20] as const
+const bowStringSwitchConfirmPixels = 10
+const bowStringSwitchConfirmMoves = 2
 
 export const positionLabelByName: Record<PositionName, string> = {
   first: '1st',
@@ -58,6 +60,32 @@ export interface PitchInfo {
   frequency: number
   midi: number
   mappingText: string
+}
+
+export interface BowStringSelectionState {
+  selectedString: ViolinString
+  pendingString: ViolinString | null
+  pendingTravel: number
+  pendingMoves: number
+}
+
+export function createBowStringSelectionState(selectedString: ViolinString = 'A'): BowStringSelectionState {
+  return {
+    selectedString,
+    pendingString: null,
+    pendingTravel: 0,
+    pendingMoves: 0,
+  }
+}
+
+export function resetBowStringSelectionState(
+  state: BowStringSelectionState,
+  selectedString: ViolinString = state.selectedString,
+): void {
+  state.selectedString = selectedString
+  state.pendingString = null
+  state.pendingTravel = 0
+  state.pendingMoves = 0
 }
 
 export function isFingerKey(value: string): value is FingerKey {
@@ -121,6 +149,49 @@ export function getStringForBowVector(dx: number, dy: number, fallback: ViolinSt
   }
 
   return angle < boundaryAngle - stringSwitchHysteresisDegrees ? closestString : fallback
+}
+
+function getAdjacentStepToward(current: ViolinString, target: ViolinString): ViolinString {
+  const currentIndex = stringNames.indexOf(current)
+  const targetIndex = stringNames.indexOf(target)
+
+  if (currentIndex < 0 || targetIndex < 0 || Math.abs(currentIndex - targetIndex) <= 1) {
+    return target
+  }
+
+  return stringNames[currentIndex + Math.sign(targetIndex - currentIndex)]
+}
+
+export function updateBowStringSelectionState(state: BowStringSelectionState, dx: number, dy: number): ViolinString {
+  const travel = Math.hypot(dx, dy)
+  if (travel < 0.001) {
+    return state.selectedString
+  }
+
+  const rawTarget = getStringForBowVector(dx, dy, state.selectedString)
+  const target = getAdjacentStepToward(state.selectedString, rawTarget)
+
+  if (target === state.selectedString) {
+    state.pendingString = null
+    state.pendingTravel = 0
+    state.pendingMoves = 0
+    return state.selectedString
+  }
+
+  if (state.pendingString !== target) {
+    state.pendingString = target
+    state.pendingTravel = 0
+    state.pendingMoves = 0
+  }
+
+  state.pendingTravel += travel
+  state.pendingMoves += 1
+
+  if (state.pendingMoves >= bowStringSwitchConfirmMoves && state.pendingTravel >= bowStringSwitchConfirmPixels) {
+    resetBowStringSelectionState(state, target)
+  }
+
+  return state.selectedString
 }
 
 export function getBowDirectionForString(dx: number, dy: number, stringName: ViolinString): -1 | 1 {

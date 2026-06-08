@@ -2,17 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { BowedStringEngine } from './BowedStringEngine'
 import {
+  createBowStringSelectionState,
   getBowDirectionForString,
   getPitchInfo,
-  getStringForBowVector,
   isFingerKey,
   positionLabelByName,
   positionNames,
+  resetBowStringSelectionState,
   stringAngleByName,
   stringNames,
   type FingerKey,
   type PositionName,
   type ViolinString,
+  updateBowStringSelectionState,
 } from './pitchMapping'
 
 type BowDirection = -1 | 0 | 1
@@ -94,6 +96,7 @@ function App() {
   const playAreaRef = useRef<HTMLElement | null>(null)
   const heldKeysRef = useRef<FingerKey[]>([])
   const lastPointerRef = useRef<{ x: number; y: number; time: number; speed: number } | null>(null)
+  const bowStringSelectionRef = useRef(createBowStringSelectionState(initialState.selectedString))
   const lastMovementTimeRef = useRef(0)
   const motionStopTimerRef = useRef<number | null>(null)
   const lastBowDirectionRef = useRef<BowDirection>(0)
@@ -150,7 +153,12 @@ function App() {
   }, [])
 
   function mergeInstrumentRef(update: Partial<InstrumentState>) {
+    const previousString = stateRef.current.selectedString
     Object.assign(stateRef.current, update)
+
+    if (update.selectedString && update.selectedString !== previousString) {
+      playAreaRef.current?.setAttribute('data-selected-string', update.selectedString)
+    }
   }
 
   function renderInstrumentState(update: Partial<InstrumentState>) {
@@ -235,6 +243,7 @@ function App() {
     const now = performance.now()
     clearMotionStopTimer()
     lastPointerRef.current = { x: clientX, y: clientY, time: now, speed: 0 }
+    resetBowStringSelectionState(bowStringSelectionRef.current, stateRef.current.selectedString)
     lastMovementTimeRef.current = now
     lastBowDirectionRef.current = 0
     mergeInstrumentRef({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
@@ -285,7 +294,7 @@ function App() {
       const initialDy = event.movementY || 0
       const initialMoved = Math.hypot(initialDx, initialDy) >= MOTION_MOVE_PIXELS
       const selectedString = initialMoved
-        ? getStringForBowVector(initialDx, initialDy, stateRef.current.selectedString)
+        ? updateBowStringSelectionState(bowStringSelectionRef.current, initialDx, initialDy)
         : stateRef.current.selectedString
       const direction: BowDirection = initialMoved ? getBowDirectionForString(initialDx, initialDy, selectedString) : 0
       mergeInstrumentRef({
@@ -313,7 +322,7 @@ function App() {
       return
     }
 
-    const selectedString = getStringForBowVector(dx, dy, stateRef.current.selectedString)
+    const selectedString = updateBowStringSelectionState(bowStringSelectionRef.current, dx, dy)
     const stringChanged = selectedString !== stateRef.current.selectedString
     const direction: BowDirection = getBowDirectionForString(dx, dy, selectedString)
     const previousDirection = lastBowDirectionRef.current
@@ -378,6 +387,7 @@ function App() {
     clearMotionStopTimer()
     lastBowDirectionRef.current = 0
     lastPointerRef.current = null
+    resetBowStringSelectionState(bowStringSelectionRef.current, stateRef.current.selectedString)
     mergeInstrumentRef({ contact: false, rawSpeed: 0, bowSpeed: 0, acceleration: 0 })
   }
 
@@ -466,6 +476,7 @@ function App() {
             onPointerLeave={stopBowContact}
             onClick={handlePlayAreaClick}
             onContextMenu={handlePlayAreaContextMenu}
+            data-selected-string={instrumentState.selectedString}
           >
             <svg className="bridge-view" viewBox="0 0 100 100" aria-hidden="true">
               <path className="bridge-curve" d={bridgeArcPath} />
