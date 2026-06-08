@@ -15,6 +15,9 @@ export const stringAngleByName: Record<ViolinString, number> = {
   E: -30,
 }
 
+const stringSwitchHysteresisDegrees = 7
+const adjacentStringBoundaryAngles = [20, 0, -20] as const
+
 export const positionLabelByName: Record<PositionName, string> = {
   first: '1st',
   third: '3rd',
@@ -78,12 +81,7 @@ export function getBowAngleForVector(dx: number, dy: number): number {
   return normalizeBowAngle((-Math.atan2(dy, dx) * 180) / Math.PI)
 }
 
-export function getStringForBowVector(dx: number, dy: number, fallback: ViolinString = 'A'): ViolinString {
-  if (Math.hypot(dx, dy) < 0.001) {
-    return fallback
-  }
-
-  const angle = getBowAngleForVector(dx, dy)
+function getClosestStringForBowAngle(angle: number, fallback: ViolinString): ViolinString {
   let bestString = fallback
   let bestDistance = Infinity
 
@@ -96,6 +94,33 @@ export function getStringForBowVector(dx: number, dy: number, fallback: ViolinSt
   }
 
   return bestString
+}
+
+export function getStringForBowVector(dx: number, dy: number, fallback: ViolinString = 'A'): ViolinString {
+  if (Math.hypot(dx, dy) < 0.001) {
+    return fallback
+  }
+
+  const angle = getBowAngleForVector(dx, dy)
+  const closestString = getClosestStringForBowAngle(angle, fallback)
+
+  if (closestString === fallback) {
+    return fallback
+  }
+
+  const currentIndex = stringNames.indexOf(fallback)
+  const targetIndex = stringNames.indexOf(closestString)
+
+  if (currentIndex < 0 || targetIndex < 0 || Math.abs(currentIndex - targetIndex) > 1) {
+    return closestString
+  }
+
+  const boundaryAngle = adjacentStringBoundaryAngles[Math.min(currentIndex, targetIndex)]
+  if (targetIndex < currentIndex) {
+    return angle > boundaryAngle + stringSwitchHysteresisDegrees ? closestString : fallback
+  }
+
+  return angle < boundaryAngle - stringSwitchHysteresisDegrees ? closestString : fallback
 }
 
 export function getBowDirectionForString(dx: number, dy: number, stringName: ViolinString): -1 | 1 {
