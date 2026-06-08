@@ -130,7 +130,9 @@ h1 {
 
 .play-area {
   position: relative;
-  min-height: clamp(340px, 49vh, 600px);
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  min-height: clamp(500px, 64vh, 760px);
   border: 1px solid rgba(242, 215, 164, 0.22);
   border-radius: 8px;
   overflow: hidden;
@@ -143,9 +145,45 @@ h1 {
   box-shadow: 0 28px 74px rgba(0, 0, 0, 0.46);
 }
 
+.sound-unlock {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(320px, calc(100% - 32px));
+  padding: 8px 9px;
+  border: 1px solid rgba(247, 204, 130, 0.36);
+  border-radius: 8px;
+  background: rgba(17, 19, 22, 0.9);
+  color: #d7c8b8;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.3);
+}
+
+.sound-unlock button {
+  border: 0;
+  border-radius: 6px;
+  background: #f7cc82;
+  color: #201914;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+  padding: 9px 11px;
+}
+
+.sound-unlock span {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
 .string-lane {
   position: relative;
-  height: 25%;
+  min-height: 0;
   display: flex;
   align-items: center;
   padding: 0 22px;
@@ -269,7 +307,7 @@ h1 {
 
 .state-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 10px;
   margin-top: 12px;
 }
@@ -389,7 +427,7 @@ h1 {
   }
 
   .play-area {
-    min-height: 450px;
+    min-height: 560px;
   }
 
   .state-grid {
@@ -436,7 +474,13 @@ h1 {
   }
 
   .play-area {
-    min-height: 410px;
+    min-height: 500px;
+  }
+
+  .sound-unlock {
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
   }
 
   .string-lane {

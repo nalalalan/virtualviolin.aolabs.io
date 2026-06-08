@@ -13,6 +13,7 @@ import {
 } from './pitchMapping'
 
 type BowDirection = -1 | 0 | 1
+type AudioStatus = 'locked' | 'starting' | 'on' | 'blocked'
 
 interface InstrumentState {
   selectedString: ViolinString
@@ -40,6 +41,7 @@ const initialState: InstrumentState = {
 
 function App() {
   const [instrumentState, setInstrumentState] = useState<InstrumentState>(initialState)
+  const [audioStatus, setAudioStatus] = useState<AudioStatus>('locked')
   const stateRef = useRef(instrumentState)
   const engineRef = useRef<BowedStringEngine | null>(null)
   const playAreaRef = useRef<HTMLElement | null>(null)
@@ -47,6 +49,7 @@ function App() {
   const lastPointerRef = useRef<{ x: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
   const audioResumeInFlightRef = useRef(false)
+  const audioUnlockedRef = useRef(false)
 
   const pitch = useMemo(
     () => getPitchInfo(instrumentState.selectedString, instrumentState.fingerKey),
@@ -78,17 +81,44 @@ function App() {
     })
   }
 
-  function requestAudioStart() {
+  function startAudioFromGesture() {
+    if (audioUnlockedRef.current) {
+      return
+    }
+
     engineRef.current ??= new BowedStringEngine()
+    const engine = engineRef.current
 
     if (audioResumeInFlightRef.current) {
       return
     }
 
     audioResumeInFlightRef.current = true
-    void engineRef.current.resume().finally(() => {
+    setAudioStatus('starting')
+    const timeoutId = window.setTimeout(() => {
       audioResumeInFlightRef.current = false
-    })
+      const state = engine.getState()
+      const isRunning = state === 'running'
+      audioUnlockedRef.current = isRunning
+      setAudioStatus(isRunning ? 'on' : 'locked')
+    }, 700)
+
+    void engine
+      .resume()
+      .then((state) => {
+        window.clearTimeout(timeoutId)
+        const isRunning = state === 'running'
+        audioUnlockedRef.current = isRunning
+        setAudioStatus(isRunning ? 'on' : 'locked')
+      })
+      .catch(() => {
+        window.clearTimeout(timeoutId)
+        audioUnlockedRef.current = false
+        setAudioStatus('blocked')
+      })
+      .finally(() => {
+        audioResumeInFlightRef.current = false
+      })
   }
 
   function beginBowContact(clientX: number, clientY: number) {
@@ -100,14 +130,20 @@ function App() {
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
-    event.preventDefault()
-    requestAudioStart()
+    if (event.pointerType !== 'mouse') {
+      event.preventDefault()
+      startAudioFromGesture()
+    }
 
     if (event.pointerType !== 'mouse') {
       event.currentTarget.setPointerCapture(event.pointerId)
     }
 
     beginBowContact(event.clientX, event.clientY)
+  }
+
+  function handlePlayAreaClick() {
+    startAudioFromGesture()
   }
 
   function handlePointerEnter(event: ReactPointerEvent<HTMLElement>) {
@@ -120,7 +156,6 @@ function App() {
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
     event.preventDefault()
-    requestAudioStart()
     updateStringFromPointer(event.clientY)
 
     const now = performance.now()
@@ -149,15 +184,17 @@ function App() {
   }
 
   function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
-    event.preventDefault()
-
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
 
-    if (event.pointerType !== 'mouse') {
-      stopBowContact()
+    if (event.pointerType === 'mouse') {
+      startAudioFromGesture()
+      return
     }
+
+    event.preventDefault()
+    stopBowContact()
   }
 
   function stopBowContact(event?: ReactPointerEvent<HTMLElement>) {
@@ -214,14 +251,14 @@ function App() {
     function handleKeyDown(event: KeyboardEvent) {
       if (isFingerKey(event.key)) {
         event.preventDefault()
-        requestAudioStart()
+        startAudioFromGesture()
         heldKeysRef.current = [...heldKeysRef.current.filter((key) => key !== event.key), event.key]
         setFingerFromHeldKeys()
         return
       }
 
       if (event.key === 'Shift') {
-        requestAudioStart()
+        startAudioFromGesture()
         updateInstrumentState({ vibrato: true })
       }
     }
@@ -286,6 +323,8 @@ function App() {
   const activeKeyLabel = getFingerLabel(instrumentState.fingerKey)
   const volumePercent = Math.round(instrumentState.bowSpeed * 100)
   const playheadTop = `${instrumentState.pointerRatio * 100}%`
+  const audioText =
+    audioStatus === 'on' ? 'sound on' : audioStatus === 'starting' ? 'starting' : audioStatus === 'blocked' ? 'blocked' : 'sound locked'
 
   return (
     <main className="app-shell">
@@ -306,7 +345,8 @@ function App() {
             <h1>Virtual Violin</h1>
           </div>
           <p className="instructions">
-            Move mouse up/down to choose string. Move left/right to bow. Hold 0-1 for chromatic notes.
+            Click once for sound. Move mouse up/down to choose string. Move left/right to bow. Hold 0-1 for chromatic
+            notes.
           </p>
         </div>
 
@@ -321,7 +361,16 @@ function App() {
           onPointerUp={handlePointerUp}
           onPointerCancel={stopBowContact}
           onPointerLeave={stopBowContact}
+          onClick={handlePlayAreaClick}
         >
+          {audioStatus !== 'on' && (
+            <div className="sound-unlock" aria-live="polite">
+              <button type="button" onClick={startAudioFromGesture}>
+                {audioStatus === 'blocked' ? 'Retry sound' : 'Start sound'}
+              </button>
+              <span>{audioStatus === 'blocked' ? 'browser blocked audio' : 'one click, no hold'}</span>
+            </div>
+          )}
           {stringNames.map((stringName) => (
             <div
               className={stringName === instrumentState.selectedString ? 'string-lane selected' : 'string-lane'}
@@ -356,6 +405,10 @@ function App() {
           <div className="state-item">
             <span>bow</span>
             <strong>{contactText}</strong>
+          </div>
+          <div className="state-item">
+            <span>sound</span>
+            <strong>{audioText}</strong>
           </div>
           <div className="state-item">
             <span>direction</span>

@@ -21,11 +21,17 @@ export class BowedStringEngine {
   private vibratoGain: GainNode | null = null
   private lastString: ViolinString = 'A'
 
-  async resume(): Promise<void> {
+  async resume(): Promise<AudioContextState> {
     this.ensureNodes()
     if (this.context?.state === 'suspended') {
       await this.context.resume()
     }
+
+    return this.context?.state ?? 'closed'
+  }
+
+  getState(): AudioContextState | 'missing' {
+    return this.context?.state ?? 'missing'
   }
 
   setState(state: BowState): void {
@@ -36,11 +42,11 @@ export class BowedStringEngine {
     }
 
     const now = this.context.currentTime
-    const bowing = state.contact && state.speed > 0.012
+    const bowing = state.contact && state.speed > 0.004
     const speed = Math.min(1, Math.max(0, state.speed))
     const attackEdge = Math.min(1, Math.max(0, state.acceleration))
-    const targetGain = bowing ? 0.018 + speed * 0.18 + attackEdge * 0.045 : 0
-    const bodyBlend = bowing ? 0.012 + speed * 0.08 : 0
+    const targetGain = bowing ? 0.045 + speed * 0.28 + attackEdge * 0.065 : 0
+    const bodyBlend = bowing ? 0.026 + speed * 0.13 : 0
     const brightness = this.getStringBrightness(state.stringName)
     const directionColor = state.direction === 0 ? 0 : state.direction * 0.04
 
