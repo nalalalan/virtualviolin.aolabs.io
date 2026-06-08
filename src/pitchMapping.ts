@@ -1,9 +1,12 @@
 export const stringNames = ['G', 'D', 'A', 'E'] as const
+export const keySignatures = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb'] as const
 
 export type ViolinString = (typeof stringNames)[number]
-export type FingerKey = '0' | '9' | '8' | '7' | '6' | '5' | '4' | '3' | '2' | '1'
+export type FingerKey = 'f' | 'd' | 's' | 'a'
+export type PositionName = 'first' | 'third'
+export type KeySignature = (typeof keySignatures)[number]
 
-export const fingerKeys: FingerKey[] = ['0', '9', '8', '7', '6', '5', '4', '3', '2', '1']
+export const fingerKeys: FingerKey[] = ['f', 'd', 's', 'a']
 export const keyStrip = ['open', ...fingerKeys] as const
 
 const baseMidiByString: Record<ViolinString, number> = {
@@ -13,20 +16,33 @@ const baseMidiByString: Record<ViolinString, number> = {
   E: 76,
 }
 
-const offsetByKey: Record<FingerKey, number> = {
-  '0': 1,
-  '9': 2,
-  '8': 3,
-  '7': 4,
-  '6': 5,
-  '5': 6,
-  '4': 7,
-  '3': 8,
-  '2': 9,
-  '1': 10,
+const tonicPitchClassByKey: Record<KeySignature, number> = {
+  C: 0,
+  G: 7,
+  D: 2,
+  A: 9,
+  E: 4,
+  F: 5,
+  Bb: 10,
+  Eb: 3,
 }
 
-const noteNames = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'] as const
+const sharpNoteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+const flatNoteNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const
+const flatKeys = new Set<KeySignature>(['F', 'Bb', 'Eb'])
+const majorScaleSteps = [0, 2, 4, 5, 7, 9, 11]
+
+const fingerIndexByKey: Record<FingerKey, number> = {
+  f: 0,
+  d: 1,
+  s: 2,
+  a: 3,
+}
+
+const positionScaleStart: Record<PositionName, number> = {
+  first: 0,
+  third: 2,
+}
 
 export interface PitchInfo {
   stringName: ViolinString
@@ -39,7 +55,7 @@ export interface PitchInfo {
 }
 
 export function isFingerKey(value: string): value is FingerKey {
-  return fingerKeys.includes(value as FingerKey)
+  return fingerKeys.includes(value.toLowerCase() as FingerKey)
 }
 
 export function getStringForRatio(yRatio: number): ViolinString {
@@ -47,14 +63,49 @@ export function getStringForRatio(yRatio: number): ViolinString {
   return stringNames[Math.floor(clamped * stringNames.length)]
 }
 
-export function getOffsetForKey(key: FingerKey | null): number {
-  return key === null ? 0 : offsetByKey[key]
+export function getScaleOffsets(openMidi: number, keySignature: KeySignature): number[] {
+  const tonic = tonicPitchClassByKey[keySignature]
+  const scalePitchClasses = new Set(majorScaleSteps.map((step) => (tonic + step) % 12))
+  const offsets: number[] = []
+
+  for (let offset = 1; offsets.length < 7 && offset <= 24; offset += 1) {
+    if (scalePitchClasses.has((openMidi + offset) % 12)) {
+      offsets.push(offset)
+    }
+  }
+
+  return offsets
 }
 
-export function getPitchInfo(stringName: ViolinString, key: FingerKey | null): PitchInfo {
-  const offset = getOffsetForKey(key)
+export function getOffsetForKey(
+  stringName: ViolinString,
+  key: FingerKey | null,
+  position: PositionName = 'first',
+  keySignature: KeySignature = 'D',
+): number {
+  if (key === null) {
+    return 0
+  }
+
+  const openMidi = baseMidiByString[stringName]
+  const offsets = getScaleOffsets(openMidi, keySignature)
+  return offsets[positionScaleStart[position] + fingerIndexByKey[key]] ?? 0
+}
+
+export function getNoteName(midi: number, keySignature: KeySignature): string {
+  const pitchClass = ((midi % 12) + 12) % 12
+  return (flatKeys.has(keySignature) ? flatNoteNames : sharpNoteNames)[pitchClass]
+}
+
+export function getPitchInfo(
+  stringName: ViolinString,
+  key: FingerKey | null,
+  position: PositionName = 'first',
+  keySignature: KeySignature = 'D',
+): PitchInfo {
+  const offset = getOffsetForKey(stringName, key, position, keySignature)
   const midi = baseMidiByString[stringName] + offset
-  const noteName = noteNames[((midi % 12) + 12) % 12]
+  const noteName = getNoteName(midi, keySignature)
   const frequency = 440 * 2 ** ((midi - 69) / 12)
 
   return {
@@ -64,7 +115,10 @@ export function getPitchInfo(stringName: ViolinString, key: FingerKey | null): P
     noteName,
     frequency,
     midi,
-    mappingText: key === null ? `${stringName} string open = ${noteName}` : `${stringName} string + ${key} = ${noteName}`,
+    mappingText:
+      key === null
+        ? `${stringName} string open = ${noteName}`
+        : `${stringName} ${position} position + ${key.toUpperCase()} = ${noteName} (${keySignature})`,
   }
 }
 
