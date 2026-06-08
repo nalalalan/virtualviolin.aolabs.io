@@ -8,6 +8,7 @@ import {
   isFingerKey,
   positionLabelByName,
   positionNames,
+  stringAngleByName,
   stringNames,
   type FingerKey,
   type PositionName,
@@ -20,12 +21,47 @@ const BOW_ON_SPEED = 0.42
 const BOW_HOLD_MS = 260
 const DIRECTION_ATTACK_MS = 95
 
-const bridgeStringMarks: Record<ViolinString, { x: number; y: number; angle: number }> = {
-  G: { x: 18, y: 62, angle: 30 },
-  D: { x: 38, y: 35, angle: 10 },
-  A: { x: 62, y: 35, angle: -10 },
-  E: { x: 82, y: 62, angle: -30 },
+const bridgeStringMarks: Record<ViolinString, { x: number; y: number }> = {
+  G: { x: 17, y: 63 },
+  D: { x: 39, y: 50 },
+  A: { x: 61, y: 50 },
+  E: { x: 83, y: 63 },
 }
+
+const bridgeArcSegments: Array<[ViolinString, ViolinString, number]> = [
+  ['G', 'D', 7.6],
+  ['D', 'A', 8.5],
+  ['A', 'E', 7.6],
+]
+
+function getBridgeTangent(stringName: ViolinString) {
+  const radians = (stringAngleByName[stringName] * Math.PI) / 180
+  return { x: Math.cos(radians), y: -Math.sin(radians) }
+}
+
+function makeBridgeArcPath() {
+  const start = bridgeStringMarks.G
+  const segments = bridgeArcSegments.map(([from, to, scale]) => {
+    const fromPoint = bridgeStringMarks[from]
+    const toPoint = bridgeStringMarks[to]
+    const fromTangent = getBridgeTangent(from)
+    const toTangent = getBridgeTangent(to)
+    const controlFrom = {
+      x: fromPoint.x + fromTangent.x * scale,
+      y: fromPoint.y + fromTangent.y * scale,
+    }
+    const controlTo = {
+      x: toPoint.x - toTangent.x * scale,
+      y: toPoint.y - toTangent.y * scale,
+    }
+
+    return `C ${controlFrom.x.toFixed(1)} ${controlFrom.y.toFixed(1)} ${controlTo.x.toFixed(1)} ${controlTo.y.toFixed(1)} ${toPoint.x} ${toPoint.y}`
+  })
+
+  return `M ${start.x} ${start.y} ${segments.join(' ')}`
+}
+
+const bridgeArcPath = makeBridgeArcPath()
 
 interface InstrumentState {
   selectedString: ViolinString
@@ -432,11 +468,11 @@ function App() {
             onContextMenu={handlePlayAreaContextMenu}
           >
             <svg className="bridge-view" viewBox="0 0 100 100" aria-hidden="true">
-              <path className="bridge-curve" d="M14 62 C28 25 72 25 86 62" />
+              <path className="bridge-curve" d={bridgeArcPath} />
               {stringNames.map((stringName) => {
                 const mark = bridgeStringMarks[stringName]
                 return (
-                  <circle className="bridge-string-point" cx={mark.x} cy={mark.y} r="4.8" key={stringName} />
+                  <circle className="bridge-string-point" cx={mark.x} cy={mark.y} r="3.2" key={stringName} />
                 )
               })}
             </svg>
