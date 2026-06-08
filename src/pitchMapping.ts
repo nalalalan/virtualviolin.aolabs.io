@@ -3,12 +3,19 @@ export const keySignatures = ['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb'] as const
 export const positionNames = ['first', 'third', 'fifth', 'seventh'] as const
 
 export type ViolinString = (typeof stringNames)[number]
-export type FingerKey = 'f' | 'd' | 's' | 'a'
+export type FingerKey = 'j' | 'h' | 'g' | 'f' | 'd' | 's' | 'a'
 export type PositionName = (typeof positionNames)[number]
 export type KeySignature = (typeof keySignatures)[number]
 
-export const fingerKeys: FingerKey[] = ['f', 'd', 's', 'a']
+export const fingerKeys: FingerKey[] = ['j', 'h', 'g', 'f', 'd', 's', 'a']
 export const keyStrip = ['open', ...fingerKeys] as const
+
+export const stringAngleByName: Record<ViolinString, number> = {
+  G: -34,
+  D: -11,
+  A: 11,
+  E: 34,
+}
 
 export const positionLabelByName: Record<PositionName, string> = {
   first: '1st',
@@ -38,20 +45,21 @@ const tonicPitchClassByKey: Record<KeySignature, number> = {
 const sharpNoteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
 const flatNoteNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const
 const flatKeys = new Set<KeySignature>(['F', 'Bb', 'Eb'])
-const majorScaleSteps = [0, 2, 4, 5, 7, 9, 11]
-
-const fingerIndexByKey: Record<FingerKey, number> = {
-  f: 0,
-  d: 1,
-  s: 2,
-  a: 3,
+const positionLowFingerOffset: Record<PositionName, number> = {
+  first: 1,
+  third: 4,
+  fifth: 8,
+  seventh: 11,
 }
 
-const positionScaleStart: Record<PositionName, number> = {
-  first: 0,
-  third: 2,
-  fifth: 4,
-  seventh: 6,
+const fingerIndexByKey: Record<FingerKey, number> = {
+  j: 0,
+  h: 1,
+  g: 2,
+  f: 3,
+  d: 4,
+  s: 5,
+  a: 6,
 }
 
 export interface PitchInfo {
@@ -73,8 +81,47 @@ export function getStringForRatio(yRatio: number): ViolinString {
   return stringNames[Math.floor(clamped * stringNames.length)]
 }
 
+export function normalizeBowAngle(angle: number): number {
+  let normalized = ((angle + 90) % 180) - 90
+  if (normalized < -90) {
+    normalized += 180
+  }
+  return normalized
+}
+
+export function getBowAngleForVector(dx: number, dy: number): number {
+  return normalizeBowAngle((Math.atan2(dx, dy) * 180) / Math.PI)
+}
+
+export function getStringForBowVector(dx: number, dy: number, fallback: ViolinString = 'A'): ViolinString {
+  if (Math.hypot(dx, dy) < 0.001) {
+    return fallback
+  }
+
+  const angle = getBowAngleForVector(dx, dy)
+  let bestString = fallback
+  let bestDistance = Infinity
+
+  for (const stringName of stringNames) {
+    const distance = Math.abs(normalizeBowAngle(angle - stringAngleByName[stringName]))
+    if (distance + 0.001 < bestDistance || (Math.abs(distance - bestDistance) <= 0.001 && stringName === fallback)) {
+      bestDistance = distance
+      bestString = stringName
+    }
+  }
+
+  return bestString
+}
+
+export function getBowDirectionForString(dx: number, dy: number, stringName: ViolinString): -1 | 1 {
+  const angle = (stringAngleByName[stringName] * Math.PI) / 180
+  const projection = dx * Math.sin(angle) + dy * Math.cos(angle)
+  return projection < 0 ? -1 : 1
+}
+
 export function getScaleOffsets(openMidi: number, keySignature: KeySignature): number[] {
   const tonic = tonicPitchClassByKey[keySignature]
+  const majorScaleSteps = [0, 2, 4, 5, 7, 9, 11]
   const scalePitchClasses = new Set(majorScaleSteps.map((step) => (tonic + step) % 12))
   const offsets: number[] = []
 
@@ -93,13 +140,14 @@ export function getOffsetForKey(
   position: PositionName = 'first',
   keySignature: KeySignature = 'D',
 ): number {
+  void stringName
+  void keySignature
+
   if (key === null) {
     return 0
   }
 
-  const openMidi = baseMidiByString[stringName]
-  const offsets = getScaleOffsets(openMidi, keySignature)
-  return offsets[positionScaleStart[position] + fingerIndexByKey[key]] ?? 0
+  return positionLowFingerOffset[position] + fingerIndexByKey[key]
 }
 
 export function getNoteName(midi: number, keySignature: KeySignature): string {

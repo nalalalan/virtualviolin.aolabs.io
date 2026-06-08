@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { BowedStringEngine } from './BowedStringEngine'
 import {
+  getBowDirectionForString,
   getPitchInfo,
-  getStringForRatio,
+  getStringForBowVector,
   isFingerKey,
   keySignatures,
   positionLabelByName,
@@ -16,7 +17,6 @@ import {
 } from './pitchMapping'
 
 type BowDirection = -1 | 0 | 1
-const STRING_BOUNDARY_GRACE = 0.055
 const MOTION_MOVE_PIXELS = 0.75
 const BOW_ON_SPEED = 0.42
 const BOW_HOLD_MS = 260
@@ -25,6 +25,13 @@ const DIRECTION_ATTACK_MS = 95
 const staffLineYs = [10, 17, 24, 31, 38] as const
 const sharpStaffYs = [10, 20.5, 6.5, 17, 27.5, 13.5, 24] as const
 const flatStaffYs = [24, 13.5, 27.5, 17, 31, 20.5, 34.5] as const
+
+const bridgeStringMarks: Record<ViolinString, { x: number; y: number; angle: number }> = {
+  G: { x: 17.5, y: 48, angle: -34 },
+  D: { x: 38.5, y: 29, angle: -11 },
+  A: { x: 61.5, y: 29, angle: 11 },
+  E: { x: 82.5, y: 48, angle: 34 },
+}
 
 function makeKeySignatureMarks(accidental: 'sharp' | 'flat', count: number) {
   const staffYs = accidental === 'sharp' ? sharpStaffYs : flatStaffYs
@@ -45,7 +52,6 @@ const keySignatureMarks: Record<KeySignature, Array<{ accidental: 'sharp' | 'fla
 interface InstrumentState {
   selectedString: ViolinString
   fingerKey: FingerKey | null
-  pointerRatio: number
   contact: boolean
   bowSpeed: number
   rawSpeed: number
@@ -59,7 +65,6 @@ interface InstrumentState {
 const initialState: InstrumentState = {
   selectedString: 'A',
   fingerKey: null,
-  pointerRatio: 0.62,
   contact: false,
   bowSpeed: 0,
   rawSpeed: 0,
@@ -75,7 +80,6 @@ function App() {
   const stateRef = useRef(instrumentState)
   const engineRef = useRef<BowedStringEngine | null>(null)
   const playAreaRef = useRef<HTMLElement | null>(null)
-  const playAreaRectRef = useRef<DOMRectReadOnly | null>(null)
   const heldKeysRef = useRef<FingerKey[]>([])
   const lastPointerRef = useRef<{ x: number; y: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
@@ -171,11 +175,6 @@ function App() {
     motionStopTimerRef.current = window.setTimeout(checkMotion, BOW_HOLD_MS)
   }
 
-  function refreshPlayAreaRect() {
-    playAreaRectRef.current = playAreaRef.current?.getBoundingClientRect() ?? null
-    return playAreaRectRef.current
-  }
-
   function getPositionStep(currentPosition: PositionName, delta: -1 | 1) {
     const currentIndex = positionNames.indexOf(currentPosition)
     const nextIndex = Math.min(positionNames.length - 1, Math.max(0, currentIndex + delta))
@@ -186,47 +185,6 @@ function App() {
     const position = getPositionStep(stateRef.current.position, delta)
     renderInstrumentState({ position })
     syncEngineNow()
-  }
-
-  function getPointerRatio(clientX: number) {
-    const rect = playAreaRectRef.current ?? refreshPlayAreaRect()
-    if (!rect || rect.width <= 0) {
-      return stateRef.current.pointerRatio
-    }
-
-    return Math.min(0.999999, Math.max(0, (clientX - rect.left) / rect.width))
-  }
-
-  function getStableStringForRatio(pointerRatio: number) {
-    const directString = getStringForRatio(pointerRatio)
-    const currentString = stateRef.current.selectedString
-    const directIndex = stringNames.indexOf(directString)
-    const currentIndex = stringNames.indexOf(currentString)
-
-    if (directIndex === currentIndex || directIndex === -1 || currentIndex === -1) {
-      return directString
-    }
-
-    if (Math.abs(directIndex - currentIndex) > 1) {
-      return directString
-    }
-
-    if (directIndex > currentIndex) {
-      const lowerBoundary = (currentIndex + 1) / stringNames.length
-      return pointerRatio > lowerBoundary + STRING_BOUNDARY_GRACE ? directString : currentString
-    }
-
-    const upperBoundary = currentIndex / stringNames.length
-    return pointerRatio < upperBoundary - STRING_BOUNDARY_GRACE ? directString : currentString
-  }
-
-  function updateStringFromPointer(clientX: number) {
-    const pointerRatio = getPointerRatio(clientX)
-    const directString = getStringForRatio(pointerRatio)
-    const selectedString = getStableStringForRatio(pointerRatio)
-    mergeInstrumentRef({ pointerRatio, selectedString })
-
-    return { directString, selectedString }
   }
 
   function startAudioFromGesture() {
@@ -264,8 +222,6 @@ function App() {
   function beginBowContact(clientX: number, clientY: number) {
     const now = performance.now()
     clearMotionStopTimer()
-    refreshPlayAreaRect()
-    updateStringFromPointer(clientX)
     lastPointerRef.current = { x: clientX, y: clientY, time: now, speed: 0 }
     lastMovementTimeRef.current = now
     lastBowDirectionRef.current = 0
@@ -309,7 +265,6 @@ function App() {
     event.preventDefault()
 
     const now = performance.now()
-    updateStringFromPointer(event.clientX)
 
     if (!stateRef.current.contact || !lastPointerRef.current) {
       lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: 0 }
@@ -317,9 +272,12 @@ function App() {
       const initialDx = event.movementX || 0
       const initialDy = event.movementY || 0
       const initialMoved = Math.hypot(initialDx, initialDy) >= MOTION_MOVE_PIXELS
-      const direction: BowDirection =
-        Math.abs(initialDx) < 0.5 ? lastBowDirectionRef.current || 1 : initialDx < 0 ? -1 : 1
+      const selectedString = initialMoved
+        ? getStringForBowVector(initialDx, initialDy, stateRef.current.selectedString)
+        : stateRef.current.selectedString
+      const direction: BowDirection = initialMoved ? getBowDirectionForString(initialDx, initialDy, selectedString) : 0
       mergeInstrumentRef({
+        selectedString,
         contact: true,
         rawSpeed: initialMoved ? BOW_ON_SPEED : 0,
         bowSpeed: initialMoved ? BOW_ON_SPEED : 0,
@@ -343,18 +301,21 @@ function App() {
       return
     }
 
-    const direction: BowDirection = Math.abs(dx) < 0.5 ? lastBowDirectionRef.current : dx < 0 ? -1 : 1
+    const selectedString = getStringForBowVector(dx, dy, stateRef.current.selectedString)
+    const stringChanged = selectedString !== stateRef.current.selectedString
+    const direction: BowDirection = getBowDirectionForString(dx, dy, selectedString)
     const previousDirection = lastBowDirectionRef.current
-    const reversedDirection = previousDirection !== 0 && direction !== 0 && direction !== previousDirection
+    const reversedDirection = previousDirection !== 0 && direction !== previousDirection
 
     lastMovementTimeRef.current = now
     lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: BOW_ON_SPEED }
     scheduleMotionStop()
 
-    if (reversedDirection) {
+    if (reversedDirection || stringChanged) {
       lastBowDirectionRef.current = direction
       lastDirectionChangeTimeRef.current = now
       mergeInstrumentRef({
+        selectedString,
         contact: true,
         rawSpeed: BOW_ON_SPEED,
         bowSpeed: BOW_ON_SPEED,
@@ -365,15 +326,14 @@ function App() {
       return
     }
 
-    if (direction !== 0) {
-      lastBowDirectionRef.current = direction
-    }
+    lastBowDirectionRef.current = direction
 
     mergeInstrumentRef({
+      selectedString,
       contact: true,
       rawSpeed: BOW_ON_SPEED,
       bowSpeed: BOW_ON_SPEED,
-      acceleration: previousDirection === 0 && direction !== 0 ? 0.55 : 0,
+      acceleration: previousDirection === 0 ? 0.55 : 0,
       direction,
     })
     syncEngineNow(now)
@@ -412,19 +372,6 @@ function App() {
   useEffect(() => {
     engineRef.current ??= new BowedStringEngine()
     engineRef.current.prime()
-    refreshPlayAreaRect()
-
-    const resizeObserver =
-      typeof ResizeObserver === 'function' && playAreaRef.current ? new ResizeObserver(refreshPlayAreaRect) : null
-    if (playAreaRef.current && resizeObserver) {
-      resizeObserver.observe(playAreaRef.current)
-    }
-
-    window.addEventListener('resize', refreshPlayAreaRect)
-    return () => {
-      window.removeEventListener('resize', refreshPlayAreaRect)
-      resizeObserver?.disconnect()
-    }
   }, [])
 
 
@@ -503,6 +450,25 @@ function App() {
     )
   }
 
+  function renderBridgeStringLine(stringName: ViolinString) {
+    const mark = bridgeStringMarks[stringName]
+    const angle = (mark.angle * Math.PI) / 180
+    const length = 28
+    const dx = Math.sin(angle) * length
+    const dy = Math.cos(angle) * length
+
+    return (
+      <line
+        className="bridge-string-guide"
+        x1={mark.x - dx}
+        y1={mark.y - dy}
+        x2={mark.x + dx}
+        y2={mark.y + dy}
+        key={`${stringName}-guide`}
+      />
+    )
+  }
+
   return (
     <main className="app-shell">
       <header className="suite-topbar" aria-label="Virtual Violin navigation">
@@ -521,7 +487,7 @@ function App() {
             className="play-area"
             ref={playAreaRef}
             role="application"
-            aria-label="Mouse bowing surface."
+            aria-label="Bridge-angle bowing surface."
             onPointerDown={handlePointerDown}
             onPointerEnter={handlePointerEnter}
             onPointerMove={handlePointerMove}
@@ -531,11 +497,21 @@ function App() {
             onClick={handlePlayAreaClick}
             onContextMenu={handlePlayAreaContextMenu}
           >
-            {stringNames.map((stringName) => (
-              <div className="string-lane" key={stringName}>
-                <span>{stringName}</span>
-              </div>
-            ))}
+            <svg className="bridge-view" viewBox="0 0 100 100" aria-hidden="true">
+              <path className="bridge-curve" d="M12 49 C25 18 39 20 50 25 C61 20 75 18 88 49" />
+              {stringNames.map(renderBridgeStringLine)}
+              {stringNames.map((stringName) => {
+                const mark = bridgeStringMarks[stringName]
+                return (
+                  <g className="bridge-string-point" key={stringName}>
+                    <circle cx={mark.x} cy={mark.y} r="4.6" />
+                    <text x={mark.x} y={mark.y + 13}>
+                      {stringName}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
           </section>
 
           <aside

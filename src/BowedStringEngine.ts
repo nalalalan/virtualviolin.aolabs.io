@@ -51,7 +51,9 @@ export class BowedStringEngine {
     const speed = Math.min(1, Math.max(0, state.speed))
     const directionChanged =
       bowing && state.direction !== 0 && this.lastDirection !== 0 && state.direction !== this.lastDirection
-    const attackEdge = directionChanged ? 1 : Math.min(1, Math.max(0, state.acceleration))
+    const stringChanged = bowing && state.stringName !== this.lastString
+    const rearticulated = directionChanged || stringChanged
+    const attackEdge = rearticulated ? 1 : Math.min(1, Math.max(0, state.acceleration))
     const targetGain = bowing ? 0.045 + speed * 0.28 + attackEdge * 0.065 : 0
     const bodyBlend = bowing ? 0.026 + speed * 0.13 : 0
     const brightness = this.getStringBrightness(state.stringName)
@@ -63,7 +65,7 @@ export class BowedStringEngine {
     this.bodyOscillator.frequency.setValueAtTime(state.frequency / 2, now)
     this.gain.gain.cancelScheduledValues(now)
     this.bodyGain.gain.cancelScheduledValues(now)
-    if (directionChanged) {
+    if (rearticulated) {
       this.gain.gain.cancelScheduledValues(now)
       this.bodyGain.gain.cancelScheduledValues(now)
       this.gain.gain.setValueAtTime(Math.max(0.0001, targetGain * 0.42), now)
