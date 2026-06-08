@@ -483,7 +483,7 @@ function App() {
               {stringNames.map((stringName) => {
                 const mark = bridgeStringMarks[stringName]
                 return (
-                  <circle className="bridge-string-point" cx={mark.x} cy={mark.y} r="3.2" key={stringName} />
+                  <circle className="bridge-string-point" cx={mark.x} cy={mark.y} r="1.65" key={stringName} />
                 )
               })}
             </svg>
