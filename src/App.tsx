@@ -75,6 +75,7 @@ function App() {
   const stateRef = useRef(instrumentState)
   const engineRef = useRef<BowedStringEngine | null>(null)
   const playAreaRef = useRef<HTMLElement | null>(null)
+  const playAreaRectRef = useRef<DOMRectReadOnly | null>(null)
   const heldKeysRef = useRef<FingerKey[]>([])
   const lastPointerRef = useRef<{ x: number; y: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
@@ -102,7 +103,8 @@ function App() {
     const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position, current.keySignature)
 
     if (Math.abs(bowSpeed - current.bowSpeed) > 0.004 || current.acceleration !== acceleration) {
-      stateRef.current = { ...stateRef.current, bowSpeed, acceleration }
+      stateRef.current.bowSpeed = bowSpeed
+      stateRef.current.acceleration = acceleration
     }
 
     const nextEngineState = {
@@ -132,7 +134,7 @@ function App() {
   }, [])
 
   function mergeInstrumentRef(update: Partial<InstrumentState>) {
-    stateRef.current = { ...stateRef.current, ...update }
+    Object.assign(stateRef.current, update)
   }
 
   function renderInstrumentState(update: Partial<InstrumentState>) {
@@ -148,10 +150,15 @@ function App() {
     }
   }
 
-  function scheduleMotionStop(movementTime: number) {
-    clearMotionStopTimer()
-    motionStopTimerRef.current = window.setTimeout(() => {
-      if (lastMovementTimeRef.current !== movementTime) {
+  function scheduleMotionStop() {
+    if (motionStopTimerRef.current !== null) {
+      return
+    }
+
+    const checkMotion = () => {
+      const elapsed = performance.now() - lastMovementTimeRef.current
+      if (elapsed < BOW_HOLD_MS) {
+        motionStopTimerRef.current = window.setTimeout(checkMotion, BOW_HOLD_MS - elapsed + 4)
         return
       }
 
@@ -159,7 +166,14 @@ function App() {
       engineRef.current?.stop()
       lastEngineStateRef.current = null
       motionStopTimerRef.current = null
-    }, BOW_HOLD_MS)
+    }
+
+    motionStopTimerRef.current = window.setTimeout(checkMotion, BOW_HOLD_MS)
+  }
+
+  function refreshPlayAreaRect() {
+    playAreaRectRef.current = playAreaRef.current?.getBoundingClientRect() ?? null
+    return playAreaRectRef.current
   }
 
   function getPositionStep(currentPosition: PositionName, delta: -1 | 1) {
@@ -175,7 +189,7 @@ function App() {
   }
 
   function getPointerRatio(clientX: number) {
-    const rect = playAreaRef.current?.getBoundingClientRect()
+    const rect = playAreaRectRef.current ?? refreshPlayAreaRect()
     if (!rect || rect.width <= 0) {
       return stateRef.current.pointerRatio
     }
@@ -216,34 +230,30 @@ function App() {
   }
 
   function startAudioFromGesture() {
+    engineRef.current ??= new BowedStringEngine()
+    const engine = engineRef.current
+    engine.prime()
+
+    if (engine.getState() === 'running') {
+      audioUnlockedRef.current = true
+    }
+
     if (audioUnlockedRef.current) {
       return
     }
-
-    engineRef.current ??= new BowedStringEngine()
-    const engine = engineRef.current
 
     if (audioResumeInFlightRef.current) {
       return
     }
 
     audioResumeInFlightRef.current = true
-    const timeoutId = window.setTimeout(() => {
-      audioResumeInFlightRef.current = false
-      const state = engine.getState()
-      const isRunning = state === 'running'
-      audioUnlockedRef.current = isRunning
-    }, 700)
-
     void engine
       .resume()
       .then((state) => {
-        window.clearTimeout(timeoutId)
         const isRunning = state === 'running'
         audioUnlockedRef.current = isRunning
       })
       .catch(() => {
-        window.clearTimeout(timeoutId)
         audioUnlockedRef.current = false
       })
       .finally(() => {
@@ -254,6 +264,7 @@ function App() {
   function beginBowContact(clientX: number, clientY: number) {
     const now = performance.now()
     clearMotionStopTimer()
+    refreshPlayAreaRect()
     updateStringFromPointer(clientX)
     lastPointerRef.current = { x: clientX, y: clientY, time: now, speed: 0 }
     lastMovementTimeRef.current = now
@@ -303,7 +314,23 @@ function App() {
     if (!stateRef.current.contact || !lastPointerRef.current) {
       lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: 0 }
       lastMovementTimeRef.current = now
-      mergeInstrumentRef({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
+      const initialDx = event.movementX || 0
+      const initialDy = event.movementY || 0
+      const initialMoved = Math.hypot(initialDx, initialDy) >= MOTION_MOVE_PIXELS
+      const direction: BowDirection =
+        Math.abs(initialDx) < 0.5 ? lastBowDirectionRef.current || 1 : initialDx < 0 ? -1 : 1
+      mergeInstrumentRef({
+        contact: true,
+        rawSpeed: initialMoved ? BOW_ON_SPEED : 0,
+        bowSpeed: initialMoved ? BOW_ON_SPEED : 0,
+        acceleration: initialMoved ? 0.55 : 0,
+        direction: initialMoved ? direction : 0,
+      })
+      if (initialMoved) {
+        lastBowDirectionRef.current = direction
+        scheduleMotionStop()
+        syncEngineNow(now)
+      }
       return
     }
 
@@ -322,7 +349,7 @@ function App() {
 
     lastMovementTimeRef.current = now
     lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: BOW_ON_SPEED }
-    scheduleMotionStop(now)
+    scheduleMotionStop()
 
     if (reversedDirection) {
       lastBowDirectionRef.current = direction
@@ -383,35 +410,23 @@ function App() {
   }
 
   useEffect(() => {
-    function handleWindowPointerMove(event: PointerEvent) {
-      if (!stateRef.current.contact || event.pointerType !== 'mouse') {
-        return
-      }
+    engineRef.current ??= new BowedStringEngine()
+    engineRef.current.prime()
+    refreshPlayAreaRect()
 
-      const rect = playAreaRef.current?.getBoundingClientRect()
-      if (!rect) {
-        return
-      }
-
-      const insidePlayArea =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom
-
-      if (!insidePlayArea) {
-        engineRef.current?.stop()
-        lastEngineStateRef.current = null
-        clearMotionStopTimer()
-        lastBowDirectionRef.current = 0
-        lastPointerRef.current = null
-        mergeInstrumentRef({ contact: false, rawSpeed: 0, bowSpeed: 0, acceleration: 0 })
-      }
+    const resizeObserver =
+      typeof ResizeObserver === 'function' && playAreaRef.current ? new ResizeObserver(refreshPlayAreaRect) : null
+    if (playAreaRef.current && resizeObserver) {
+      resizeObserver.observe(playAreaRef.current)
     }
 
-    window.addEventListener('pointermove', handleWindowPointerMove)
-    return () => window.removeEventListener('pointermove', handleWindowPointerMove)
-  }, [syncEngineNow])
+    window.addEventListener('resize', refreshPlayAreaRect)
+    return () => {
+      window.removeEventListener('resize', refreshPlayAreaRect)
+      resizeObserver?.disconnect()
+    }
+  }, [])
+
 
   useEffect(() => {
     function setFingerFromHeldKeys() {
@@ -461,18 +476,6 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [syncEngineNow])
-
-  useEffect(() => {
-    let frameId = 0
-
-    function animate(now: number) {
-      syncEngineNow(now)
-      frameId = requestAnimationFrame(animate)
-    }
-
-    frameId = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(frameId)
   }, [syncEngineNow])
 
   const positionLabel = positionLabelByName[instrumentState.position]

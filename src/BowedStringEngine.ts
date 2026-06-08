@@ -22,6 +22,10 @@ export class BowedStringEngine {
   private lastString: ViolinString = 'A'
   private lastDirection: -1 | 0 | 1 = 0
 
+  prime(): void {
+    this.ensureNodes()
+  }
+
   async resume(): Promise<AudioContextState> {
     this.ensureNodes()
     if (this.context?.state === 'suspended') {
@@ -57,27 +61,34 @@ export class BowedStringEngine {
     this.bodyOscillator.frequency.cancelScheduledValues(now)
     this.oscillator.frequency.setValueAtTime(state.frequency, now)
     this.bodyOscillator.frequency.setValueAtTime(state.frequency / 2, now)
+    this.gain.gain.cancelScheduledValues(now)
+    this.bodyGain.gain.cancelScheduledValues(now)
     if (directionChanged) {
-      const restartAt = now + 0.006
       this.gain.gain.cancelScheduledValues(now)
       this.bodyGain.gain.cancelScheduledValues(now)
-      this.gain.gain.setTargetAtTime(0, now, 0.002)
-      this.bodyGain.gain.setTargetAtTime(0, now, 0.003)
-      this.gain.gain.setTargetAtTime(targetGain + 0.02, restartAt, 0.004)
-      this.bodyGain.gain.setTargetAtTime(bodyBlend + 0.01, restartAt, 0.006)
+      this.gain.gain.setValueAtTime(Math.max(0.0001, targetGain * 0.42), now)
+      this.bodyGain.gain.setValueAtTime(Math.max(0.0001, bodyBlend * 0.52), now)
+      this.gain.gain.linearRampToValueAtTime(targetGain + 0.018, now + 0.003)
+      this.bodyGain.gain.linearRampToValueAtTime(bodyBlend + 0.008, now + 0.004)
+      this.gain.gain.linearRampToValueAtTime(targetGain, now + 0.01)
+      this.bodyGain.gain.linearRampToValueAtTime(bodyBlend, now + 0.012)
     } else {
-      this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.004 : 0.018)
-      this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.008 : 0.024)
+      this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.0015 : 0.006)
+      this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.0025 : 0.008)
     }
-    this.filter.frequency.setTargetAtTime(850 + brightness + speed * 1300 + attackEdge * 700, now, 0.01)
-    this.filter.Q.setTargetAtTime(1.1 + speed * 2.6, now, 0.012)
+    this.filter.frequency.cancelScheduledValues(now)
+    this.filter.Q.cancelScheduledValues(now)
+    this.filter.frequency.setValueAtTime(850 + brightness + speed * 1300 + attackEdge * 700, now)
+    this.filter.Q.setValueAtTime(1.1 + speed * 2.6, now)
 
     if (this.panner) {
-      this.panner.pan.setTargetAtTime(Math.max(-0.22, Math.min(0.22, state.direction * (0.08 + speed * 0.14))), now, 0.008)
+      this.panner.pan.cancelScheduledValues(now)
+      this.panner.pan.setValueAtTime(Math.max(-0.22, Math.min(0.22, state.direction * (0.08 + speed * 0.14))), now)
     }
 
     if (this.vibratoGain) {
-      this.vibratoGain.gain.setTargetAtTime(state.vibrato && bowing ? 11 + speed * 5 + directionColor : 0, now, 0.01)
+      this.vibratoGain.gain.cancelScheduledValues(now)
+      this.vibratoGain.gain.setValueAtTime(state.vibrato && bowing ? 11 + speed * 5 + directionColor : 0, now)
     }
 
     this.lastString = state.stringName
@@ -92,8 +103,10 @@ export class BowedStringEngine {
     }
 
     const now = this.context.currentTime
-    this.gain.gain.setTargetAtTime(0, now, 0.012)
-    this.bodyGain.gain.setTargetAtTime(0, now, 0.016)
+    this.gain.gain.cancelScheduledValues(now)
+    this.bodyGain.gain.cancelScheduledValues(now)
+    this.gain.gain.setTargetAtTime(0, now, 0.004)
+    this.bodyGain.gain.setTargetAtTime(0, now, 0.006)
     this.lastDirection = 0
   }
 
@@ -109,7 +122,6 @@ export class BowedStringEngine {
     const gain = context.createGain()
     const bodyGain = context.createGain()
     const filter = context.createBiquadFilter()
-    const compressor = context.createDynamicsCompressor()
     const vibrato = context.createOscillator()
     const vibratoGain = context.createGain()
 
@@ -124,11 +136,6 @@ export class BowedStringEngine {
     filter.type = 'bandpass'
     filter.frequency.value = 1300
     filter.Q.value = 1.5
-    compressor.threshold.value = -18
-    compressor.knee.value = 18
-    compressor.ratio.value = 5
-    compressor.attack.value = 0.004
-    compressor.release.value = 0.06
     vibrato.frequency.value = 5.4
     vibratoGain.gain.value = 0
 
@@ -138,13 +145,12 @@ export class BowedStringEngine {
     bodyOscillator.connect(bodyGain)
     gain.connect(filter)
     bodyGain.connect(filter)
-    filter.connect(compressor)
 
     if (panner) {
-      compressor.connect(panner)
+      filter.connect(panner)
       panner.connect(context.destination)
     } else {
-      compressor.connect(context.destination)
+      filter.connect(context.destination)
     }
 
     oscillator.start()
