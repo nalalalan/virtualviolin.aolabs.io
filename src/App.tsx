@@ -46,6 +46,7 @@ function App() {
   const heldKeysRef = useRef<FingerKey[]>([])
   const lastPointerRef = useRef<{ x: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
+  const audioResumeInFlightRef = useRef(false)
 
   const pitch = useMemo(
     () => getPitchInfo(instrumentState.selectedString, instrumentState.fingerKey),
@@ -77,27 +78,61 @@ function App() {
     })
   }
 
-  async function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
-    event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+  function requestAudioStart() {
     engineRef.current ??= new BowedStringEngine()
-    await engineRef.current.resume()
-    updateStringFromPointer(event.clientY)
-    lastPointerRef.current = { x: event.clientX, time: performance.now(), speed: 0 }
-    lastMovementTimeRef.current = performance.now()
+
+    if (audioResumeInFlightRef.current) {
+      return
+    }
+
+    audioResumeInFlightRef.current = true
+    void engineRef.current.resume().finally(() => {
+      audioResumeInFlightRef.current = false
+    })
+  }
+
+  function beginBowContact(clientX: number, clientY: number) {
+    const now = performance.now()
+    updateStringFromPointer(clientY)
+    lastPointerRef.current = { x: clientX, time: now, speed: 0 }
+    lastMovementTimeRef.current = now
     updateInstrumentState({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.preventDefault()
+    requestAudioStart()
+
+    if (event.pointerType !== 'mouse') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+
+    beginBowContact(event.clientX, event.clientY)
+  }
+
+  function handlePointerEnter(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType !== 'mouse') {
+      return
+    }
+
+    beginBowContact(event.clientX, event.clientY)
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
     event.preventDefault()
+    requestAudioStart()
     updateStringFromPointer(event.clientY)
 
-    if (!stateRef.current.contact) {
+    const now = performance.now()
+
+    if (!stateRef.current.contact || !lastPointerRef.current) {
+      lastPointerRef.current = { x: event.clientX, time: now, speed: 0 }
+      lastMovementTimeRef.current = now
+      updateInstrumentState({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
       return
     }
 
-    const now = performance.now()
-    const previous = lastPointerRef.current ?? { x: event.clientX, time: now, speed: 0 }
+    const previous = lastPointerRef.current
     const dx = event.clientX - previous.x
     const dt = Math.max(8, now - previous.time)
     const pixelsPerSecond = (Math.abs(dx) / dt) * 1000
@@ -110,7 +145,19 @@ function App() {
     }
 
     lastPointerRef.current = { x: event.clientX, time: now, speed: rawSpeed }
-    updateInstrumentState({ rawSpeed, bowSpeed: rawSpeed, acceleration, direction })
+    updateInstrumentState({ contact: true, rawSpeed, bowSpeed: rawSpeed, acceleration, direction })
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    event.preventDefault()
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    if (event.pointerType !== 'mouse') {
+      stopBowContact()
+    }
   }
 
   function stopBowContact(event?: ReactPointerEvent<HTMLElement>) {
@@ -127,6 +174,38 @@ function App() {
   }
 
   useEffect(() => {
+    function handleWindowPointerMove(event: PointerEvent) {
+      if (!stateRef.current.contact || event.pointerType !== 'mouse') {
+        return
+      }
+
+      const rect = playAreaRef.current?.getBoundingClientRect()
+      if (!rect) {
+        return
+      }
+
+      const insidePlayArea =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
+
+      if (!insidePlayArea) {
+        engineRef.current?.stop()
+        lastPointerRef.current = null
+        setInstrumentState((current) => {
+          const next = { ...current, contact: false, rawSpeed: 0, bowSpeed: 0, acceleration: 0 }
+          stateRef.current = next
+          return next
+        })
+      }
+    }
+
+    window.addEventListener('pointermove', handleWindowPointerMove)
+    return () => window.removeEventListener('pointermove', handleWindowPointerMove)
+  }, [])
+
+  useEffect(() => {
     function setFingerFromHeldKeys() {
       const held = heldKeysRef.current
       updateInstrumentState({ fingerKey: held.length ? held[held.length - 1] : null })
@@ -135,12 +214,14 @@ function App() {
     function handleKeyDown(event: KeyboardEvent) {
       if (isFingerKey(event.key)) {
         event.preventDefault()
+        requestAudioStart()
         heldKeysRef.current = [...heldKeysRef.current.filter((key) => key !== event.key), event.key]
         setFingerFromHeldKeys()
         return
       }
 
       if (event.key === 'Shift') {
+        requestAudioStart()
         updateInstrumentState({ vibrato: true })
       }
     }
@@ -225,8 +306,7 @@ function App() {
             <h1>Virtual Violin</h1>
           </div>
           <p className="instructions">
-            Move mouse up/down to choose string. Hold left click and move left/right to bow. Hold 0-1 for chromatic
-            notes.
+            Move mouse up/down to choose string. Move left/right to bow. Hold 0-1 for chromatic notes.
           </p>
         </div>
 
@@ -236,8 +316,9 @@ function App() {
           role="application"
           aria-label="Mouse bowing surface. Top to bottom strings are G, D, A, and E."
           onPointerDown={handlePointerDown}
+          onPointerEnter={handlePointerEnter}
           onPointerMove={handlePointerMove}
-          onPointerUp={stopBowContact}
+          onPointerUp={handlePointerUp}
           onPointerCancel={stopBowContact}
           onPointerLeave={stopBowContact}
         >
