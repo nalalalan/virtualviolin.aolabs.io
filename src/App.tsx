@@ -14,6 +14,9 @@ import {
 
 type BowDirection = -1 | 0 | 1
 type AudioStatus = 'locked' | 'starting' | 'on' | 'blocked'
+const STRING_BOUNDARY_GRACE = 0.055
+const VERTICAL_MOVE_PIXELS = 4
+const VERTICAL_MOVE_RATIO = 1.15
 
 interface InstrumentState {
   selectedString: ViolinString
@@ -46,7 +49,7 @@ function App() {
   const engineRef = useRef<BowedStringEngine | null>(null)
   const playAreaRef = useRef<HTMLElement | null>(null)
   const heldKeysRef = useRef<FingerKey[]>([])
-  const lastPointerRef = useRef<{ x: number; time: number; speed: number } | null>(null)
+  const lastPointerRef = useRef<{ x: number; y: number; time: number; speed: number } | null>(null)
   const lastMovementTimeRef = useRef(0)
   const audioResumeInFlightRef = useRef(false)
   const audioUnlockedRef = useRef(false)
@@ -57,11 +60,9 @@ function App() {
   )
 
   function updateInstrumentState(update: Partial<InstrumentState>) {
-    setInstrumentState((current) => {
-      const next = { ...current, ...update }
-      stateRef.current = next
-      return next
-    })
+    const next = { ...stateRef.current, ...update }
+    stateRef.current = next
+    setInstrumentState(next)
   }
 
   function getPointerRatio(clientY: number) {
@@ -73,12 +74,38 @@ function App() {
     return Math.min(0.999999, Math.max(0, (clientY - rect.top) / rect.height))
   }
 
+  function getStableStringForRatio(pointerRatio: number) {
+    const directString = getStringForRatio(pointerRatio)
+    const currentString = stateRef.current.selectedString
+    const directIndex = stringNames.indexOf(directString)
+    const currentIndex = stringNames.indexOf(currentString)
+
+    if (directIndex === currentIndex || directIndex === -1 || currentIndex === -1) {
+      return directString
+    }
+
+    if (Math.abs(directIndex - currentIndex) > 1) {
+      return directString
+    }
+
+    if (directIndex > currentIndex) {
+      const lowerBoundary = (currentIndex + 1) / stringNames.length
+      return pointerRatio > lowerBoundary + STRING_BOUNDARY_GRACE ? directString : currentString
+    }
+
+    const upperBoundary = currentIndex / stringNames.length
+    return pointerRatio < upperBoundary - STRING_BOUNDARY_GRACE ? directString : currentString
+  }
+
   function updateStringFromPointer(clientY: number) {
     const pointerRatio = getPointerRatio(clientY)
+    const selectedString = getStableStringForRatio(pointerRatio)
     updateInstrumentState({
       pointerRatio,
-      selectedString: getStringForRatio(pointerRatio),
+      selectedString,
     })
+
+    return selectedString
   }
 
   function startAudioFromGesture() {
@@ -124,7 +151,7 @@ function App() {
   function beginBowContact(clientX: number, clientY: number) {
     const now = performance.now()
     updateStringFromPointer(clientY)
-    lastPointerRef.current = { x: clientX, time: now, speed: 0 }
+    lastPointerRef.current = { x: clientX, y: clientY, time: now, speed: 0 }
     lastMovementTimeRef.current = now
     updateInstrumentState({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
   }
@@ -156,12 +183,12 @@ function App() {
 
   function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
     event.preventDefault()
-    updateStringFromPointer(event.clientY)
 
     const now = performance.now()
+    updateStringFromPointer(event.clientY)
 
     if (!stateRef.current.contact || !lastPointerRef.current) {
-      lastPointerRef.current = { x: event.clientX, time: now, speed: 0 }
+      lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: 0 }
       lastMovementTimeRef.current = now
       updateInstrumentState({ contact: true, rawSpeed: 0, bowSpeed: 0, acceleration: 0, direction: 0 })
       return
@@ -169,7 +196,23 @@ function App() {
 
     const previous = lastPointerRef.current
     const dx = event.clientX - previous.x
+    const dy = event.clientY - previous.y
     const dt = Math.max(8, now - previous.time)
+    const mostlyVertical =
+      Math.abs(dy) >= VERTICAL_MOVE_PIXELS && Math.abs(dy) > Math.abs(dx) * VERTICAL_MOVE_RATIO
+
+    if (mostlyVertical) {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: 0 }
+      updateInstrumentState({
+        contact: true,
+        rawSpeed: 0,
+        bowSpeed: 0,
+        acceleration: 0,
+      })
+      engineRef.current?.stop()
+      return
+    }
+
     const pixelsPerSecond = (Math.abs(dx) / dt) * 1000
     const rawSpeed = Math.min(1, pixelsPerSecond / 980)
     const acceleration = Math.min(1, Math.abs(rawSpeed - previous.speed) / Math.max(dt / 1000, 0.016) / 8)
@@ -179,7 +222,7 @@ function App() {
       lastMovementTimeRef.current = now
     }
 
-    lastPointerRef.current = { x: event.clientX, time: now, speed: rawSpeed }
+    lastPointerRef.current = { x: event.clientX, y: event.clientY, time: now, speed: rawSpeed }
     updateInstrumentState({ contact: true, rawSpeed, bowSpeed: rawSpeed, acceleration, direction })
   }
 
