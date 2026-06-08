@@ -17,6 +17,7 @@ export const stringAngleByName: Record<ViolinString, number> = {
 
 const stringSwitchHysteresisDegrees = 7
 const adjacentStringBoundaryAngles = [28, 0, -28] as const
+const outerStringEntryExtraDegrees = 9
 const bowStringSwitchConfirmPixels = 10
 const bowStringSwitchConfirmMoves = 2
 
@@ -144,11 +145,15 @@ export function getStringForBowVector(dx: number, dy: number, fallback: ViolinSt
   }
 
   const boundaryAngle = adjacentStringBoundaryAngles[Math.min(currentIndex, targetIndex)]
+  const entryExtra =
+    (fallback === 'D' && closestString === 'G') || (fallback === 'A' && closestString === 'E')
+      ? outerStringEntryExtraDegrees
+      : 0
   if (targetIndex < currentIndex) {
-    return angle > boundaryAngle + stringSwitchHysteresisDegrees ? closestString : fallback
+    return angle > boundaryAngle + stringSwitchHysteresisDegrees + entryExtra ? closestString : fallback
   }
 
-  return angle < boundaryAngle - stringSwitchHysteresisDegrees ? closestString : fallback
+  return angle < boundaryAngle - stringSwitchHysteresisDegrees - entryExtra ? closestString : fallback
 }
 
 function getAdjacentStepToward(current: ViolinString, target: ViolinString): ViolinString {
