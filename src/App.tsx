@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { BowedStringEngine } from './BowedStringEngine'
 import {
@@ -93,6 +93,44 @@ function App() {
     vibrato: boolean
   } | null>(null)
 
+  const syncEngineNow = useCallback((now = performance.now()) => {
+    const current = stateRef.current
+    const age = now - lastMovementTimeRef.current
+    const bowSpeed = current.contact && current.rawSpeed > 0 && age < BOW_HOLD_MS ? BOW_ON_SPEED : 0
+    const attackAge = now - lastDirectionChangeTimeRef.current
+    const acceleration = current.acceleration > 0 && attackAge < DIRECTION_ATTACK_MS ? current.acceleration : 0
+    const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position, current.keySignature)
+
+    if (Math.abs(bowSpeed - current.bowSpeed) > 0.004 || current.acceleration !== acceleration) {
+      stateRef.current = { ...stateRef.current, bowSpeed, acceleration }
+    }
+
+    const nextEngineState = {
+      frequency: pitchInfo.frequency,
+      stringName: pitchInfo.stringName,
+      speed: bowSpeed,
+      acceleration,
+      direction: current.direction,
+      contact: current.contact && age < 220,
+      vibrato: current.vibrato,
+    }
+    const previousEngineState = lastEngineStateRef.current
+    const engineStateChanged =
+      !previousEngineState ||
+      Math.abs(nextEngineState.frequency - previousEngineState.frequency) > 0.1 ||
+      nextEngineState.stringName !== previousEngineState.stringName ||
+      nextEngineState.speed !== previousEngineState.speed ||
+      nextEngineState.acceleration !== previousEngineState.acceleration ||
+      nextEngineState.direction !== previousEngineState.direction ||
+      nextEngineState.contact !== previousEngineState.contact ||
+      nextEngineState.vibrato !== previousEngineState.vibrato
+
+    if (engineStateChanged) {
+      engineRef.current?.setState(nextEngineState)
+      lastEngineStateRef.current = nextEngineState
+    }
+  }, [])
+
   function mergeInstrumentRef(update: Partial<InstrumentState>) {
     stateRef.current = { ...stateRef.current, ...update }
   }
@@ -133,6 +171,7 @@ function App() {
   function stepPosition(delta: -1 | 1) {
     const position = getPositionStep(stateRef.current.position, delta)
     renderInstrumentState({ position })
+    syncEngineNow()
   }
 
   function getPointerRatio(clientX: number) {
@@ -295,6 +334,7 @@ function App() {
         acceleration: 1,
         direction,
       })
+      syncEngineNow(now)
       return
     }
 
@@ -309,6 +349,7 @@ function App() {
       acceleration: previousDirection === 0 && direction !== 0 ? 0.55 : 0,
       direction,
     })
+    syncEngineNow(now)
   }
 
   function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
@@ -370,12 +411,13 @@ function App() {
 
     window.addEventListener('pointermove', handleWindowPointerMove)
     return () => window.removeEventListener('pointermove', handleWindowPointerMove)
-  }, [])
+  }, [syncEngineNow])
 
   useEffect(() => {
     function setFingerFromHeldKeys() {
       const held = heldKeysRef.current
       mergeInstrumentRef({ fingerKey: held.length ? held[held.length - 1] : null })
+      syncEngineNow()
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -392,6 +434,7 @@ function App() {
       if (event.key === 'Shift') {
         startAudioFromGesture()
         mergeInstrumentRef({ vibrato: true })
+        syncEngineNow()
       }
     }
 
@@ -407,6 +450,7 @@ function App() {
 
       if (event.key === 'Shift') {
         mergeInstrumentRef({ vibrato: false })
+        syncEngineNow()
       }
     }
 
@@ -417,54 +461,19 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [])
+  }, [syncEngineNow])
 
   useEffect(() => {
     let frameId = 0
 
     function animate(now: number) {
-      const current = stateRef.current
-      const age = now - lastMovementTimeRef.current
-      const bowSpeed = current.contact && current.rawSpeed > 0 && age < BOW_HOLD_MS ? BOW_ON_SPEED : 0
-      const attackAge = now - lastDirectionChangeTimeRef.current
-      const acceleration = current.acceleration > 0 && attackAge < DIRECTION_ATTACK_MS ? current.acceleration : 0
-      const pitchInfo = getPitchInfo(current.selectedString, current.fingerKey, current.position, current.keySignature)
-
-      if (Math.abs(bowSpeed - current.bowSpeed) > 0.004 || (!current.contact && current.bowSpeed !== 0)) {
-        mergeInstrumentRef({ bowSpeed, acceleration })
-      }
-
-      const nextEngineState = {
-        frequency: pitchInfo.frequency,
-        stringName: pitchInfo.stringName,
-        speed: bowSpeed,
-        acceleration,
-        direction: current.direction,
-        contact: current.contact && age < 220,
-        vibrato: current.vibrato,
-      }
-      const previousEngineState = lastEngineStateRef.current
-      const engineStateChanged =
-        !previousEngineState ||
-        Math.abs(nextEngineState.frequency - previousEngineState.frequency) > 0.1 ||
-        nextEngineState.stringName !== previousEngineState.stringName ||
-        nextEngineState.speed !== previousEngineState.speed ||
-        nextEngineState.acceleration !== previousEngineState.acceleration ||
-        nextEngineState.direction !== previousEngineState.direction ||
-        nextEngineState.contact !== previousEngineState.contact ||
-        nextEngineState.vibrato !== previousEngineState.vibrato
-
-      if (engineStateChanged) {
-        engineRef.current?.setState(nextEngineState)
-        lastEngineStateRef.current = nextEngineState
-      }
-
+      syncEngineNow(now)
       frameId = requestAnimationFrame(animate)
     }
 
     frameId = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(frameId)
-  }, [])
+  }, [syncEngineNow])
 
   const positionLabel = positionLabelByName[instrumentState.position]
 
@@ -509,7 +518,7 @@ function App() {
             className="play-area"
             ref={playAreaRef}
             role="application"
-            aria-label="Mouse bowing surface. Left to right strings are G, D, A, and E."
+            aria-label="Mouse bowing surface."
             onPointerDown={handlePointerDown}
             onPointerEnter={handlePointerEnter}
             onPointerMove={handlePointerMove}
@@ -544,7 +553,10 @@ function App() {
               type="button"
               aria-label={`${signature} key signature`}
               title={`${signature} key signature`}
-              onClick={() => renderInstrumentState({ keySignature: signature })}
+              onClick={() => {
+                renderInstrumentState({ keySignature: signature })
+                syncEngineNow()
+              }}
             >
               {renderKeySignature(signature)}
             </button>

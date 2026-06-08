@@ -53,29 +53,31 @@ export class BowedStringEngine {
     const brightness = this.getStringBrightness(state.stringName)
     const directionColor = state.direction === 0 ? 0 : state.direction * 0.04
 
-    this.oscillator.frequency.setTargetAtTime(state.frequency, now, 0.012)
-    this.bodyOscillator.frequency.setTargetAtTime(state.frequency / 2, now, 0.018)
+    this.oscillator.frequency.cancelScheduledValues(now)
+    this.bodyOscillator.frequency.cancelScheduledValues(now)
+    this.oscillator.frequency.setValueAtTime(state.frequency, now)
+    this.bodyOscillator.frequency.setValueAtTime(state.frequency / 2, now)
     if (directionChanged) {
-      const restartAt = now + 0.035
+      const restartAt = now + 0.006
       this.gain.gain.cancelScheduledValues(now)
       this.bodyGain.gain.cancelScheduledValues(now)
-      this.gain.gain.setTargetAtTime(0, now, 0.006)
-      this.bodyGain.gain.setTargetAtTime(0, now, 0.008)
-      this.gain.gain.setTargetAtTime(targetGain + 0.025, restartAt, 0.012)
-      this.bodyGain.gain.setTargetAtTime(bodyBlend + 0.012, restartAt, 0.018)
+      this.gain.gain.setTargetAtTime(0, now, 0.002)
+      this.bodyGain.gain.setTargetAtTime(0, now, 0.003)
+      this.gain.gain.setTargetAtTime(targetGain + 0.02, restartAt, 0.004)
+      this.bodyGain.gain.setTargetAtTime(bodyBlend + 0.01, restartAt, 0.006)
     } else {
-      this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.018 : 0.05)
-      this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.03 : 0.06)
+      this.gain.gain.setTargetAtTime(targetGain, now, bowing ? 0.004 : 0.018)
+      this.bodyGain.gain.setTargetAtTime(bodyBlend, now, bowing ? 0.008 : 0.024)
     }
-    this.filter.frequency.setTargetAtTime(850 + brightness + speed * 1300 + attackEdge * 700, now, 0.045)
-    this.filter.Q.setTargetAtTime(1.1 + speed * 2.6, now, 0.06)
+    this.filter.frequency.setTargetAtTime(850 + brightness + speed * 1300 + attackEdge * 700, now, 0.01)
+    this.filter.Q.setTargetAtTime(1.1 + speed * 2.6, now, 0.012)
 
     if (this.panner) {
-      this.panner.pan.setTargetAtTime(Math.max(-0.22, Math.min(0.22, state.direction * (0.08 + speed * 0.14))), now, 0.035)
+      this.panner.pan.setTargetAtTime(Math.max(-0.22, Math.min(0.22, state.direction * (0.08 + speed * 0.14))), now, 0.008)
     }
 
     if (this.vibratoGain) {
-      this.vibratoGain.gain.setTargetAtTime(state.vibrato && bowing ? 11 + speed * 5 + directionColor : 0, now, 0.04)
+      this.vibratoGain.gain.setTargetAtTime(state.vibrato && bowing ? 11 + speed * 5 + directionColor : 0, now, 0.01)
     }
 
     this.lastString = state.stringName
@@ -90,8 +92,8 @@ export class BowedStringEngine {
     }
 
     const now = this.context.currentTime
-    this.gain.gain.setTargetAtTime(0, now, 0.045)
-    this.bodyGain.gain.setTargetAtTime(0, now, 0.055)
+    this.gain.gain.setTargetAtTime(0, now, 0.012)
+    this.bodyGain.gain.setTargetAtTime(0, now, 0.016)
     this.lastDirection = 0
   }
 
@@ -101,7 +103,7 @@ export class BowedStringEngine {
     }
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext
-    const context = new AudioContextClass({ latencyHint: 'interactive' })
+    const context = new AudioContextClass({ latencyHint: 0.003 })
     const oscillator = context.createOscillator()
     const bodyOscillator = context.createOscillator()
     const gain = context.createGain()
@@ -126,7 +128,7 @@ export class BowedStringEngine {
     compressor.knee.value = 18
     compressor.ratio.value = 5
     compressor.attack.value = 0.004
-    compressor.release.value = 0.14
+    compressor.release.value = 0.06
     vibrato.frequency.value = 5.4
     vibratoGain.gain.value = 0
 
