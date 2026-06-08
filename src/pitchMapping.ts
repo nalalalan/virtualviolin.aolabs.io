@@ -16,7 +16,7 @@ export const stringAngleByName: Record<ViolinString, number> = {
 }
 
 const stringSwitchHysteresisDegrees = 7
-const adjacentStringBoundaryAngles = [20, 0, -20] as const
+const adjacentStringBoundaryAngles = [25, 0, -25] as const
 const bowStringSwitchConfirmPixels = 10
 const bowStringSwitchConfirmMoves = 2
 

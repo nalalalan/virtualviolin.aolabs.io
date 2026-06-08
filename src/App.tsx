@@ -25,8 +25,8 @@ const DIRECTION_ATTACK_MS = 95
 
 const bridgeStringMarks: Record<ViolinString, { x: number; y: number }> = {
   G: { x: 17, y: 63 },
-  D: { x: 39, y: 50 },
-  A: { x: 61, y: 50 },
+  D: { x: 38, y: 50 },
+  A: { x: 62, y: 50 },
   E: { x: 83, y: 63 },
 }
 
